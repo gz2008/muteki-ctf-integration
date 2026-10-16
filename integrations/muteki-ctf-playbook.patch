@@ -1,0 +1,1443 @@
+diff --git a/apps/web/capability_management_api.py b/apps/web/capability_management_api.py
+index bb7f4dc..d7cb17e 100644
+--- a/apps/web/capability_management_api.py
++++ b/apps/web/capability_management_api.py
+@@ -44,6 +44,7 @@ from muteki.capability_management import (
+ )
+ from muteki.solver.container_exec import WORKER_IMAGE
+ from muteki.solver.worker_skills import (
++    CTF_PLAYBOOK_SKILL_NAME,
+     container_agent_browser_available,
+     legacy_user_skill_paths,
+     project_skill_roots,
+@@ -415,11 +416,14 @@ def create_capability_management_router(
+         blackboard_enabled = capability_resource_enabled(
+             "skills", "muteki-blackboard")
+         browser_enabled = capability_resource_enabled("skills", "agent-browser")
++        playbook_enabled = capability_resource_enabled(
++            "skills", CTF_PLAYBOOK_SKILL_NAME)
+         repo_root = Path(__file__).parents[2]
+         agent_plugin_root = (
+             repo_root / "muteki" / "agent_plugins" / "muteki-control")
+         blackboard_source = repo_root / "skills" / "muteki-blackboard"
+         browser_source = repo_root / "skills" / "muteki-agent-browser"
++        playbook_source = repo_root / "skills" / CTF_PLAYBOOK_SKILL_NAME
+         browser_available = False
+         if browser_enabled and (browser_source / "SKILL.md").is_file():
+             browser_available = await asyncio.to_thread(
+@@ -525,6 +529,26 @@ def create_capability_management_router(
+                         "legacy_copies": [],
+                         "lifecycle": "new_workers",
+                     },
++                    {
++                        "id": CTF_PLAYBOOK_SKILL_NAME,
++                        "name": "Muteki CTF Playbook",
++                        "enabled": playbook_enabled,
++                        "mutable": True,
++                        "health": (
++                            "disabled" if not playbook_enabled
++                            else "ready"
++                            if (playbook_source / "SKILL.md").is_file()
++                            else "missing"
++                        ),
++                        "source": str(playbook_source),
++                        "scope": "ctf_worker_workspace",
++                        "engines": {
++                            engine: list(project_skill_roots(engine))
++                            for engine in VALID_BASE_ENGINES
++                        },
++                        "legacy_copies": [],
++                        "lifecycle": "new_workers",
++                    },
+                     {
+                         "id": "muteki-control",
+                         "name": "Muteki Control Agent Plugin",
+diff --git a/muteki/capability_management.py b/muteki/capability_management.py
+index 796c82f..af87aae 100644
+--- a/muteki/capability_management.py
++++ b/muteki/capability_management.py
+@@ -12,7 +12,11 @@ _LOCK = threading.RLock()
+ _PATH: Path | None = None
+ _DEFAULTS = {
+     "mcp": {"muteki-control": True, "computer-use": True},
+-    "skills": {"muteki-blackboard": True, "agent-browser": True},
++    "skills": {
++        "muteki-blackboard": True,
++        "agent-browser": True,
++        "muteki-ctf-local-playbook": True,
++    },
+ }
+ 
+ 
+diff --git a/muteki/solver/cli_process.py b/muteki/solver/cli_process.py
+index 81623c8..93ec420 100644
+--- a/muteki/solver/cli_process.py
++++ b/muteki/solver/cli_process.py
+@@ -22,6 +22,7 @@ from muteki.solver.worker_skills import (
+     container_agent_browser_available,
+     stage_agent_browser_skill,
+     stage_blackboard_skill,
++    stage_ctf_playbook_skill,
+     stage_role_contract,
+ )
+ 
+@@ -127,6 +128,11 @@ def _worker_env(self, cwd: Optional[str] = None) -> dict:
+                 mode=str(getattr(self.challenge, "mode", "ctf") or "ctf"),
+                 enabled=browser_enabled,
+             )
++            stage_ctf_playbook_skill(
++                skill_workdir, engine=self.driver.name, container=self.container,
++                mode=str(getattr(self.challenge, "mode", "ctf") or "ctf"),
++                category=str(getattr(self.challenge, "category", "") or ""),
++            )
+             plugins = getattr(self, "plugin_service", None)
+             if plugins is not None:
+                 plugins.stage_worker(
+diff --git a/muteki/solver/cli_prompts.py b/muteki/solver/cli_prompts.py
+index 8288e67..4f9549c 100644
+--- a/muteki/solver/cli_prompts.py
++++ b/muteki/solver/cli_prompts.py
+@@ -88,6 +88,12 @@ _CTF_FACT_ASSERTION_NOTE = (
+     "可复用的入口写清怎么接着用、怎么确认还活着；只成功过一次的不要写成默认入口。"
+ )
+ 
++_CTF_PLAYBOOK_NOTE = (
++    "需要方法索引时读项目内已投影的 `muteki-ctf-local-playbook` Skill（当前 cwd 的 skills "
++    "目录），再按题型打开 `references/<分类>.md`，用它挑选下一个可证伪的实验；"
++    "它是方法论索引，不能替代真实工具输出。\n"
++)
++
+ _CTF_WORKER_REMINDERS = (
+     "停止新增实验。确认的新事实用 submit-fact、commit-step 交接；有界排除用 mark-deadend；未完成则交接实际进度，不制造 Fact。",
+     "本轮探索时间已超建议上限。聚焦当前 Step，交接已试和未试范围；没有确认事实时如实结束。",
+@@ -104,6 +110,7 @@ _EXEC_PROMPT = (
+     "完成当前 CTF 任务。你可以使用完整 shell 和常用工具。\n\n"
+     "{ctx}\n"
+     "{kb}\n"
++    f"{_CTF_PLAYBOOK_NOTE}"
+     "运行真实命令并完整检查输出。复用已有会话、Cookie、共享文件、后台进程和团队事实。"
+     "确认可复用原语后立即 submit-fact 并 commit-step；没有确认事实时如实结束。\n\n"
+     f"{_CTF_BLACKBOARD_PROTOCOL}"
+@@ -115,6 +122,7 @@ _EXPLORE_PROMPT = (
+     "{ctx}\n"
+     "{kb}\n"
+     "## 当前方向\n{intent_goal}\n\n"
++    f"{_CTF_PLAYBOOK_NOTE}"
+     "把当前方向当作工作重点，运行真实命令并检查完整输出。复用共享事实、文件、会话和后台"
+     "进程。确认可被后续 Worker 复用的原语后，立即把它写成这一条 Fact 并 commit-step；不要"
+     "为做完清单或顺着打下一环而拖延。临时文件使用 `$TMPDIR` 或当前工作目录，不要读取或复用"
+diff --git a/muteki/solver/ctf_taxonomy.py b/muteki/solver/ctf_taxonomy.py
+new file mode 100644
+index 0000000..ededc96
+--- /dev/null
++++ b/muteki/solver/ctf_taxonomy.py
+@@ -0,0 +1,132 @@
++"""Category action priors from the repository taxonomy.
++
++``skills/muteki-worldmodel/taxonomy`` shipped six category files that nothing
++referenced. This module turns one of them into a compact prior block that a CTF
++Worker receives with the playbook, so the action vocabulary, risk classes and
++completion state are visible where the work happens instead of staying inert
++JSON.
++
++The loader never raises: a missing or malformed file yields an empty prior,
++because a methodology hint must not be able to fail a run.
++"""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++from typing import Any, Optional
++
++_TAXONOMY_ROOT = (
++    Path(__file__).resolve().parents[2]
++    / "skills" / "muteki-worldmodel" / "taxonomy"
++)
++
++# The challenge category is spelled ``reverse`` while the taxonomy file is
++# ``rev.json``; keep the mapping explicit instead of guessing by prefix.
++_CATEGORY_FILES: dict[str, str] = {
++    "web": "web",
++    "pwn": "pwn",
++    "reverse": "rev",
++    "crypto": "crypto",
++    "forensics": "forensics",
++    "misc": "misc",
++}
++
++_RISK_ORDER = {"safe": 0, "probe": 1, "exploit": 2}
++
++
++def taxonomy_path(category: str) -> Optional[Path]:
++    """Path of the taxonomy file for one challenge category, if it exists."""
++    name = _CATEGORY_FILES.get(str(category or "").strip().lower())
++    if not name:
++        return None
++    path = _TAXONOMY_ROOT / f"{name}.json"
++    return path if path.is_file() else None
++
++
++def load_category(category: str) -> Optional[dict[str, Any]]:
++    """Parsed taxonomy for one category, or ``None`` when unavailable."""
++    path = taxonomy_path(category)
++    if path is None:
++        return None
++    try:
++        data = json.loads(path.read_text(encoding="utf-8"))
++    except (OSError, json.JSONDecodeError):
++        return None
++    if not isinstance(data, dict) or not data.get("domain"):
++        return None
++    return data
++
++
++def _sorted_actions(data: dict[str, Any]) -> list[dict[str, Any]]:
++    actions = [item for item in data.get("actions", []) if isinstance(item, dict)]
++    return sorted(
++        actions,
++        key=lambda item: (
++            _RISK_ORDER.get(str(item.get("risk_class", "")), 9),
++            int(item.get("cost_estimate_units") or 0),
++            str(item.get("name", "")),
++        ),
++    )
++
++
++def category_prior(category: str) -> str:
++    """Compact agent-facing prior block, or an empty string when unavailable."""
++    data = load_category(category)
++    if data is None:
++        return ""
++    lines = [
++        "## Category action prior",
++        "",
++        f"- category: `{data.get('domain')}`"
++        f"  completion state: `{data.get('completion_state', '')}`",
++    ]
++    entities = ", ".join(str(item) for item in data.get("entity_kinds", []))
++    if entities:
++        lines.append(f"- entity kinds: {entities}")
++    states = ", ".join(f"`{item}`" for item in data.get("state_variables", []))
++    if states:
++        lines.append(f"- track state: {states}")
++    actions = _sorted_actions(data)
++    if actions:
++        cheap = [
++            f"`{item.get('name')}` ({item.get('risk_class')}, "
++            f"{item.get('cost_estimate_units')}u)"
++            for item in actions if str(item.get("risk_class")) != "exploit"
++        ]
++        costly = [
++            f"`{item.get('name')}` ({item.get('risk_class')}, "
++            f"{item.get('cost_estimate_units')}u)"
++            for item in actions if str(item.get("risk_class")) == "exploit"
++        ]
++        if cheap:
++            lines.append("- cheapest falsifiable moves first: " + ", ".join(cheap))
++        if costly:
++            lines.append("- escalate only with evidence: " + ", ".join(costly))
++    reachability = data.get("initial_reachability")
++    if isinstance(reachability, (int, float)) and reachability > 0:
++        lines.append(
++            "- treat the target as unreachable until a real response proves "
++            "otherwise; the taxonomy expects "
++            f"{reachability:g} initial reachability"
++        )
++    lines.append(
++        "- this prior is vocabulary and ordering, not evidence: a Fact still "
++        "needs real tool output."
++    )
++    return "\n".join(lines) + "\n"
++
++
++def available_categories() -> tuple[str, ...]:
++    """Categories that currently have a usable taxonomy file."""
++    return tuple(
++        category for category in _CATEGORY_FILES if taxonomy_path(category)
++    )
++
++
++__all__ = [
++    "available_categories",
++    "category_prior",
++    "load_category",
++    "taxonomy_path",
++]
+diff --git a/muteki/solver/reason.py b/muteki/solver/reason.py
+index de1aac5..102d1b9 100644
+--- a/muteki/solver/reason.py
++++ b/muteki/solver/reason.py
+@@ -270,19 +270,36 @@ def build_reason_prompt(
+     goal: Optional[str] = None,
+     mode: str = "ctf",
+     scope: Optional[str] = None,
++    category: Optional[str] = None,
+ ) -> list[dict]:
+     if mode != "ctf":
+         raise ValueError("legacy JSON Reason supports CTF only")
+     system = REASON_SYSTEM.replace("{max_intents}", str(max_intents))
++    user = f"共享求解图：\n\n{summary}\n\n"
++    prior = _category_prior_block(category)
++    if prior:
++        user += prior + "\n"
+     return [
+         {"role": "system", "content": system},
+         {
+             "role": "user",
+-            "content": f"共享求解图：\n\n{summary}\n\n只输出规划 JSON。",
++            "content": user + "只输出规划 JSON。",
+         },
+     ]
+ 
+ 
++def _category_prior_block(category: Optional[str]) -> str:
++    """Taxonomy-derived action prior for the planner, empty when unavailable."""
++    if not category:
++        return ""
++    from muteki.solver.ctf_taxonomy import category_prior
++
++    try:
++        return category_prior(str(category))
++    except (OSError, ValueError):
++        return ""
++
++
+ def _extract_json_diagnostic(text: str) -> tuple[dict, str, str]:
+     """Pull the first JSON object and retain the exact parse outcome."""
+     if not str(text or "").strip():
+diff --git a/muteki/solver/worker_skills.py b/muteki/solver/worker_skills.py
+index 0ba0ad6..6c5469c 100644
+--- a/muteki/solver/worker_skills.py
++++ b/muteki/solver/worker_skills.py
+@@ -28,6 +28,10 @@ _REPO_SKILL = (
+ _REPO_BROWSER_SKILL = (
+     Path(__file__).resolve().parents[2] / "skills" / "muteki-agent-browser"
+ )
++_REPO_CTF_PLAYBOOK_SKILL = (
++    Path(__file__).resolve().parents[2] / "skills" / "muteki-ctf-local-playbook"
++)
++CTF_PLAYBOOK_SKILL_NAME = "muteki-ctf-local-playbook"
+ _CONTAINER_AGENT_BROWSER = "/usr/local/bin/agent-browser"
+ _CONTAINER_CHROMIUM = "/usr/bin/chromium"
+ 
+@@ -116,6 +120,210 @@ def stage_agent_browser_skill(
+     return staged
+ 
+ 
++def stage_ctf_playbook_skill(
++    workdir: str | Path,
++    *,
++    engine: str,
++    container: object | None = None,
++    mode: str = "ctf",
++    category: str = "",
++) -> list[str]:
++    """Expose the category-routed CTF playbook to CTF Workers.
++
++    The playbook is a reference Skill, not a prompt: a Worker opens ``SKILL.md``
++    and at most one ``references/<category>.md`` when it needs method, so the
++    per-Step prompt keeps its size. Penetration-testing Workers keep their own
++    guidance and are deliberately skipped.
++
++    It is an optional capability: a disabled setting, a missing source, or a
++    non-CTF mode returns an empty list instead of failing Worker preparation.
++    Operator-supplied content at a projected path is preserved.
++
++    ``category`` additionally materialises the category action prior from
++    ``skills/muteki-worldmodel/taxonomy`` as ``references/category-prior.md``,
++    which is the only consumer of that repository data.
++    """
++    if str(mode or "ctf") != "ctf":
++        return []
++
++    from muteki.capability_management import enabled as capability_enabled
++
++    if not capability_enabled("skills", CTF_PLAYBOOK_SKILL_NAME):
++        return []
++    source = _REPO_CTF_PLAYBOOK_SKILL
++    if not (source / "SKILL.md").is_file():
++        return []
++
++    root = Path(workdir).resolve()
++    target = root / ".muteki-skills" / CTF_PLAYBOOK_SKILL_NAME
++    target.mkdir(parents=True, exist_ok=True)
++    shutil.copyfile(source / "SKILL.md", target / "SKILL.md")
++    references = source / "references"
++    if references.is_dir():
++        shutil.copytree(references, target / "references", dirs_exist_ok=True)
++    prior = _category_prior_text(category)
++    if prior:
++        (target / "references").mkdir(parents=True, exist_ok=True)
++        (target / "references" / "category-prior.md").write_text(
++            prior, encoding="utf-8"
++        )
++    tool_index = tool_index_text(category=category, container=container)
++    if tool_index:
++        (target / "references").mkdir(parents=True, exist_ok=True)
++        (target / "references" / "tool-index.md").write_text(
++            tool_index, encoding="utf-8"
++        )
++    if container is not None:
++        from muteki.solver.container_exec import _chown_tree_to_worker
++        _chown_tree_to_worker(str(target), image=container.image)
++
++    staged: list[str] = []
++    for relative in project_skill_roots(engine):
++        destination = root / relative / CTF_PLAYBOOK_SKILL_NAME
++        destination.parent.mkdir(parents=True, exist_ok=True)
++        link = os.path.relpath(target, start=destination.parent)
++        try:
++            if destination.is_symlink():
++                if os.readlink(destination) == link:
++                    staged.append(str(destination))
++                    continue
++                destination.unlink()
++            elif destination.exists():
++                # An operator-provided Skill with this name wins; the playbook
++                # never overwrites Worker project content.
++                staged.append(str(destination))
++                continue
++            destination.symlink_to(link, target_is_directory=True)
++        except OSError:
++            # Filesystems without symlink support get a private physical copy.
++            # The container path is not readable on the host, so that case must
++            # fail loudly instead of copying an unrelated source.
++            if container is not None:
++                raise
++            shutil.copytree(target, destination)
++        staged.append(str(destination))
++    return staged
++
++
++def _category_prior_text(category: str) -> str:
++    """Category prior rendered from the repository taxonomy; empty when absent."""
++    from muteki.solver.ctf_taxonomy import category_prior
++
++    try:
++        return category_prior(category)
++    except (OSError, ValueError):
++        return ""
++
++
++def _local_tool_root() -> Path:
++    """Tool root a local Worker receives as ./toolbox, mirroring workspace.py."""
++    repo_root = Path(__file__).resolve().parents[2]
++    return Path(
++        os.environ.get("MUTEKI_LOCAL_WORKER_ROOT")
++        or os.environ.get("MUTEKI_MAC_WORKER_ROOT")
++        or repo_root / "ctf-tools"
++    ).resolve()
++
++
++def tool_index_text(
++    *, category: str = "", container: object | None = None,
++) -> str:
++    """Inventory of what this Worker can actually call, or an empty string.
++
++    The playbook names tools in prose; a Worker otherwise discovers which of
++    them exist by trial and error. Local Workers get the real listing of their
++    projected tool root. Container Workers get the corpus layout plus the hint
++    to enumerate `./toolbox/bin` themselves, because probing the image here
++    would duplicate the workspace probe.
++    """
++    lines: list[str] = ["## Tool index", ""]
++    if container is None:
++        root = _local_tool_root()
++        bin_dir = root / "bin"
++        names: list[str] = []
++        if bin_dir.is_dir():
++            names = sorted(
++                item.name for item in bin_dir.iterdir() if item.is_file()
++            )
++        if names:
++            lines.append(
++                f"- `./toolbox/bin` exposes {len(names)} commands: "
++                + ", ".join(f"`{name}`" for name in names)
++            )
++        else:
++            lines.append(
++                "- `./toolbox/bin` is unavailable in this run; verify a command "
++                "with `command -v <name>` before relying on it."
++            )
++        corpora: list[str] = []
++        for logical, relative in (
++            ("knowledge", "knowledges"),
++            ("pocs", "pocs"),
++            ("wordlists", "wordlists"),
++            ("nuclei-templates", "nuclei-templates"),
++        ):
++            path = root / relative
++            if path.is_dir() and any(path.iterdir()):
++                corpora.append(f"`./toolbox/{logical}`")
++        if corpora:
++            lines.append(
++                "- offline corpora: " + ", ".join(corpora)
++                + "; search them with `./toolbox/bin/ctf-corpus <regex>` "
++                "(regex) or `./toolbox/bin/ctf-index \"<question>\"` (ranked "
++                "passages) instead of reading whole trees."
++            )
++        if "ctf-xor" in names:
++            lines.append(
++                "- obfuscated payloads: `./toolbox/bin/ctf-xor <file>` derives a "
++                "repeating XOR pad from known or expected plaintext and only "
++                "accepts it when a PNG/zlib/ZIP checksum verifies it."
++            )
++        if "tesseract" in names:
++            lines.append(
++                "- text carried inside an image (a flag rendered into a "
++                "screenshot, a captcha, a scanned page): upscale first "
++                "(`magick in.png -resize 400% -colorspace Gray -threshold 50% "
++                "big.png`) then `./toolbox/bin/tesseract big.png -`; small text "
++                "reads as garbage."
++            )
++        if "ctf-triage" in names:
++            lines.append(
++                "- start every Step with `./toolbox/bin/ctf-triage .`: one pass "
++                "for types, entropy, embedded objects, archive contents and "
++                "protections, plus the next command worth running. "
++                "For captures use `./toolbox/bin/ctf-net CAP --out carved/`, "
++                "which reassembles streams in sequence order, finds the record "
++                "framing, derives a repeating pad from forced plaintext, and "
++                "validates what it carves."
++            )
++        glibc_libs = Path("/opt/ctf/third-party/glibc-all-in-one/libs")
++        if glibc_libs.is_dir():
++            versions = sorted(
++                item.name for item in glibc_libs.iterdir() if item.is_dir()
++            )
++            if versions:
++                lines.append(
++                    "- offline glibc builds for local reproduction: "
++                    + ", ".join(versions)
++                )
++    else:
++        lines.append(
++            "- enumerate the projected tool root yourself: "
++            "`ls ./toolbox/bin` and `command -v <name>`; slim images carry fewer "
++            "entries than the Kali full image."
++        )
++        lines.append(
++            "- offline corpora live under `./toolbox/knowledge|pocs|wordlists|"
++            "nuclei-templates` when the host projected them."
++        )
++    lines.append("")
++    lines.append(
++        "Check `command -v` before a long command; the index reflects the run, "
++        "not a promise."
++    )
++    return "\n".join(lines) + "\n"
++
++
+ def stage_blackboard_skill(
+     workdir: str | Path,
+     *,
+diff --git a/muteki/swarm/coordinator_dispatch.py b/muteki/swarm/coordinator_dispatch.py
+index ddc693f..455b74a 100644
+--- a/muteki/swarm/coordinator_dispatch.py
++++ b/muteki/swarm/coordinator_dispatch.py
+@@ -996,6 +996,7 @@ class _DispatchReasonMixin:
+                     goal=None,
+                     mode=getattr(self.challenge, "mode", "ctf"),
+                     scope=(getattr(self.challenge, "scope", "") or None),
++                    category=getattr(self.challenge, "category", None),
+                 )
+             )
+             estimated_reason_tokens = estimate_reason_messages_tokens(preview_messages)
+@@ -1084,6 +1085,7 @@ class _DispatchReasonMixin:
+                         goal=reason_args["goal"],
+                         mode=reason_args["mode"],
+                         scope=reason_args["scope"],
++                        category=getattr(self.challenge, "category", None),
+                             )
+                 )
+                 section_chars: dict[str, int] = {
+diff --git a/scripts/build_desktop_runtime.py b/scripts/build_desktop_runtime.py
+index 17df012..df43bde 100644
+--- a/scripts/build_desktop_runtime.py
++++ b/scripts/build_desktop_runtime.py
+@@ -77,14 +77,23 @@ from muteki.solver.cli_solver import CliSolver
+ from muteki.solver.worker_skills import (
+     project_skill_roots,
+     stage_blackboard_skill,
++    stage_ctf_playbook_skill,
+ )
+ 
+ blackboard = app / "skills" / "muteki-blackboard"
+ browser = app / "skills" / "muteki-agent-browser"
++playbook = app / "skills" / "muteki-ctf-local-playbook"
+ required = (
+     blackboard / "SKILL.md",
+     blackboard / "blackboard.py",
+     browser / "SKILL.md",
++    playbook / "SKILL.md",
++    playbook / "references" / "web.md",
++    playbook / "references" / "pwn.md",
++    playbook / "references" / "reverse.md",
++    playbook / "references" / "crypto.md",
++    playbook / "references" / "forensics.md",
++    playbook / "references" / "misc.md",
+ )
+ missing = [str(path.relative_to(app)) for path in required if not path.is_file()]
+ if missing:
+@@ -125,6 +134,21 @@ with tempfile.TemporaryDirectory(prefix="muteki-desktop-worker-skills-") as temp
+     if not (root / "pentest/.muteki-skills/muteki-blackboard/blackboard.py").is_file():
+         raise FileNotFoundError("Pentest Blackboard script was not staged")
+ 
++    playbook = [
++        str(standard_root / relative / "muteki-ctf-local-playbook")
++        for relative in project_skill_roots("codex")
++    ]
++    for staged in playbook:
++        skill = Path(staged)
++        if not skill.is_dir() or not (skill / "SKILL.md").is_file():
++            raise FileNotFoundError(f"CTF Playbook Skill projection is unusable: {skill}")
++    reference = (standard_root / ".muteki-skills/muteki-ctf-local-playbook"
++                 / "references/pwn.md")
++    if not reference.is_file():
++        raise FileNotFoundError("CTF Playbook references were not staged")
++    if stage_ctf_playbook_skill(root / "pentest", engine="codex", mode="pentest"):
++        raise RuntimeError("CTF Playbook must not reach penetration-testing Workers")
++
+ print("Desktop Worker Skill resources ready")
+ '''
+     env = os.environ.copy()
+diff --git a/skills/muteki-ctf-local-playbook/SKILL.md b/skills/muteki-ctf-local-playbook/SKILL.md
+index d522170..0370f25 100644
+--- a/skills/muteki-ctf-local-playbook/SKILL.md
++++ b/skills/muteki-ctf-local-playbook/SKILL.md
+@@ -1,44 +1,157 @@
+ ---
+ name: muteki-ctf-local-playbook
+ description: >
+-  Local black-box CTF playbook for forensics/crypto/misc file challenges on a
+-  full shell. Use when the challenge attaches a pcap, binary, disk image, or
+-  ciphertext blob — before burning long random exploration. Prefer host tools
+-  already on PATH (tshark, tcpdump, binwalk, strings, xxd, file, python3).
++  Category-routed black-box CTF methodology playbook for the standard
++  categories (web, pwn, reverse, crypto, forensics, misc). Use at the start of
++  a CTF Step to choose one bounded first direction and the right tool, and when
++  a direction stalls to pick the next falsifiable experiment. Read the matching
++  references/<category>.md before a long tool run.
+ ---
+ 
+-# Local CTF playbook (no answer spoilers)
++# CTF playbook (methodology, never answers)
+ 
+-Drive ONE direction to a recoverable artifact before switching.
++This Skill carries method, not solutions. It says which observation separates
++two hypotheses and which command produces that observation.
+ 
+-## Pcap / network forensics
++## Hard rules
+ 
+-1. `file` + `capinfos` / `tshark -q -z io,phs` to confirm capture type.
+-2. List conversations: `tshark -r CAP -q -z conv,tcp`.
+-3. Follow the brief's port (or the busiest stream):  
+-   `tshark -r CAP -q -z follow,tcp,raw,N` and also `follow,tcp,ascii,N`.
+-4. Reassemble to a file — do not stop at hex dumps:  
+-   decode hex/raw stream to `shared/stream0.bin`, then `file`/`strings`/`binwalk`.
+-5. Custom/unknown protocols: parse length-prefixed frames in python3; carve
+-   embedded PE/ELF/ZIP/PNG by magic; write carved files under `shared/`.
++1. Read the team graph first. Check the initial prompt, `shared/`, and open
++   tmux windows before re-running anything.
++2. Every claim cites real output from a command you ran in this Step. A guess,
++   a remembered technique, or a plausible-looking value is not a Fact.
++3. Drive ONE direction until it produces a recoverable artifact (a file, a
++   value, a working primitive) or is ruled out. Breadth-first tool spam
++   destroys the team's information budget.
++4. Keep large blobs in files (`shared/`, current cwd); cite paths, not pastes.
++5. Prefer the cheapest falsifiable test. A 3-second timing canary beats a
++   10-minute automated scan for the same hypothesis.
++6. A flag is submitted only as the exact bytes that appeared in real output.
++   Never reconstruct a flag from a format hint.
++7. When a bounded direction is excluded, record it with `mark-deadend`
++   (tested scope + observed result) so no other Worker pays that cost again.
+ 
+-FORBIDDEN for pcaps: XOR/LFSR "crypto" on the global header or filename hashes.
++## Sixty-second triage
+ 
+-## Crypto / weird binaries
++One command performs the whole inventory - types, entropy, embedded objects,
++archive contents, protections, flagged strings - and prints the next commands
++that are worth running for each detected type. Run it before choosing anything:
+ 
+-1. `file`, `strings`, `xxd`/`hexdump` headers, `readelf`/`objdump` if ELF.
+-2. Separate container format (magic/header) from ciphertext payload.
+-3. Prefer falsifiable tests: known-plaintext at a named offset, short repeating
+-   XOR, LFSR/Berlekamp on a cited keystream — expect printable/ELF/archive output.
+-4. Emit `VERIFIED_FACT=` for each confirmed structural finding.
++```bash
++./toolbox/bin/ctf-triage .
++```
+ 
+-## Flash / filesystem blobs
++When `./toolbox` is absent, look for `.tools/` in the working directory - the
++same helpers are usually copied there as stdlib-only python:
+ 
+-1. `binwalk -e` / signature scan; mount or unpack only player-facing layers.
+-2. Search carved trees for credentials, keys, and `flag{…}`-shaped strings.
++```bash
++python .tools/ctf-triage.py .
++python .tools/ctf-net.py CAPTURE.pcap --out carved
++python .tools/ctf-repair.py DAMAGED.png --write fixed.png
++```
+ 
+-## Always
++Stay inside the working directory: challenge directories are sometimes nested
++inside the harness that grades them, and reading the harness invalidates the
++result even when it makes the challenge easier. If neither `./toolbox` nor
++`.tools/` exists, fall back to the manual commands in `references/<category>.md`.
+ 
+-- Read `.muteki_board.md` / blackboard before redo.
+-- Put long blobs in files; facts cite paths.
+-- Actually run tools; do not only plan.
++Use `--json` when you want to feed the result to another step. The report never
++guesses: a check it could not run is reported as unavailable rather than
++assumed, so treat an absent fact as "not yet measured", not as "absent in the
++file".
++
++Then answer: what single observation would most reduce uncertainty? That is the
++Step, not "explore the challenge".
++
++| Observation | Category | Reference |
++| --- | --- | --- |
++| URL, port, source files, cookies, API doc | web | `references/web.md` |
++| ELF/PE with an input protocol, `checksec` output | pwn | `references/pwn.md` |
++| "Enter the key", crackme, packed or obfuscated binary | reverse | `references/reverse.md` |
++| Parameters, modulus, key exchange, ciphertext-only | crypto | `references/crypto.md` |
++| pcap, disk image, memory dump, image, audio, archive | forensics | `references/forensics.md` |
++| Jail, esolang, encoding chain, checker script, service bot | misc | `references/misc.md` |
++
++When the category is genuinely two-way, test the cheaper one to a decision
++point (one request or one command) before switching. Do not pre-load two
++references into context.
++
++`references/category-prior.md`, when present, is generated from the repository
++taxonomy for this challenge's category: it lists the cheapest falsifiable moves
++first, the moves that need evidence before escalating, and the state that marks
++completion. Treat it as vocabulary and ordering, never as evidence.
++
++## Tool readiness
++
++Never assume a tool exists. Two commands settle it, and they are cheap:
++
++```bash
++command -v sqlmap tshark pwntools vol3 r2 gdb 2>/dev/null
++<tool> --help | head -20
++```
++
++Kali full Worker images also ship offline knowledge at
++`/home/kali/knowledges` (PayloadsAllTheThings, HackTricks) and PoCs at
++`/home/kali/pocs`; a targeted `rg` there is faster than browsing the web.
++Missing dependency: report it as an environment fact instead of silently
++changing approach. Do not install packages mid-Step unless the Step is blocked
++without them.
++
++When the challenge directory exposes an offline corpus (a local Worker mounts
++it as `./toolbox`), search it before reaching for the web:
++
++```bash
++./toolbox/bin/ctf-corpus -c pwn "tcache.*poison"      # regex, you know the keyword
++./toolbox/bin/ctf-index "how is house of einherjar set up"   # rank, you know the symptom
++```
++
++`ctf-corpus` lists its category aliases with `-l`; `ctf-index` covers the prose
++corpora only and returns ranked passages with file paths. Both are read-only
++lookups — cite the path and line you used as evidence, and never paste a
++payload from the corpus as if it were an observation about the target.
++
++## Quick starts
++
++Each quick start is the first bounded experiment, not the whole category. Load
++the reference file for the decision tree.
++
++- **web**: fingerprint (`whatweb`, response headers, `robots.txt`), enumerate
++  content (`ffuf`/`gobuster` with a small list first), then map every
++  model-controlled input (param, header, cookie, path segment, file upload).
++  Prove one injection class manually before handing it to an automated tool.
++- **pwn**: `checksec`, `file`, `readelf -h`, `strings | rg -i 'flag|sh'`, then
++  run it locally and capture the exact I/O protocol before writing any exploit.
++- **reverse**: `file`, `strings -a -n 6`, identify language/packer, then decide
++  static (r2/ghidra) versus dynamic (gdb/ltrace) versus symbolic (angr/z3).
++- **crypto**: separate container/encoding from the actual cryptographic
++  payload, identify the primitive, then attack the *documented* weakness —
++  parameter reuse, small exponent, nonce reuse, ECB structure.
++- **forensics**: identify the true container (`file`, `binwalk`), extract to
++  files, then search the extraction tree for keys, credentials and
++  flag-shaped strings.
++- **misc**: identify the encoding layer by layer (`CyberChef magic` is one
++  experiment, not an answer), or read the checker/jail source and enumerate
++  what the input still permits.
++
++## When a direction stalls
++
++Escalate the class of experiment, not the volume:
++
++1. Re-read the challenge text and the initial graph projection for a constraint
++   you ignored (format hint, length, alphabet, protocol).
++2. Re-check the last assumption with an independent tool (different parser,
++   different decoder, hexdump by hand).
++3. Narrow the search: pin versions, fix one variable, use known-plaintext at a
++   named offset.
++4. Run an ablation: change exactly one input and compare the response bytes.
++5. Only then automate or brute force — with a stop condition and a log file.
++
++Signs to stop and hand off: identical output for three different hypotheses,
++a tool error treated as a negative result, or a direction whose next step costs
++more than the remaining time budget.
++
++## Handoff
++
++Publish the increment, not the story: what was observed, when, in what context,
++what still is not verified, and how a later Worker continues from here
++(command, file path, session name, health check). Put the flag in
++`submit-flag` and the reusable primitive in `submit-fact`, then `commit-step`.
+diff --git a/skills/muteki-ctf-local-playbook/references/crypto.md b/skills/muteki-ctf-local-playbook/references/crypto.md
+new file mode 100644
+index 0000000..75fbf73
+--- /dev/null
++++ b/skills/muteki-ctf-local-playbook/references/crypto.md
+@@ -0,0 +1,90 @@
++# Crypto
++
++## 1. Separate the layers
++
++Challenge text, parameters, and blobs are three different things. First answer:
++is this an encoding chain, a classical cipher, or a modern primitive with a
++misuse? Try the cheap automations once, then read the actual parameters.
++
++```bash
++file cipher.txt; head -c 200 cipher.txt | xxd | head
++python3 - <<'PY'
++import base64, binascii
++data = open('cipher.txt','rb').read().strip()
++for name, fn in (('b64', base64.b64decode), ('b32', base64.b32decode)):
++    try: print(name, fn(data)[:60])
++    except Exception as e: print(name, 'no', type(e).__name__)
++PY
++```
++
++Encoding/classical layers: base16/32/58/64/85, hex, Morse, Bacon, A1Z26,
++Braille, ROT/Atbash/Vigenere/Playfair/rail-fence (frequency analysis, Index of
++Coincidence, Kasiski). Run the easy ones, but state which layer you removed —
++"CyberChef magic said so" is not a verified fact.
++
++## 2. RSA attack checklist (cheapest first)
++
++1. Is `n` already factored? Offline: trial division, then `ecm` for small and
++   medium factors (`printf '%s\n' N | ecm 20000`), then `sympy.factorint` or
++   Sage when `n` is small. `factordb` is a network lookup - use it only if the
++   environment has egress, and never as the first move.
++2. Shared prime across two moduli: `gcd(n1, n2)`.
++3. Small `e` with `m^e < n`: integer `e`-th root of the ciphertext.
++4. `e = 3` with structured padding/message: Coppersmith small-root, or
++   Franklin-Reiter for related messages.
++5. Small `d`: Wiener (continued fractions), then Boneh-Durfee (lattice).
++6. Common modulus, same message to several keys.
++7. Partial key exposure (known high bits of `p`/`q`/`d`) -> Coppersmith.
++8. Custom scheme in source: read it literally. Typical bugs are signing with
++   the wrong exponent, reusing a nonce, or a missing fault check (Bellcore).
++
++Tools: pycryptodome, sympy, gmpy2, sagemath, z3, `RsaCtfTool` for a second
++opinion after you know which attack class fits.
++
++```python
++from Crypto.Util.number import long_to_bytes, inverse
++from math import gcd
++```
++
++## 3. Block ciphers
++
++| Observation | Attack |
++| --- | --- |
++| Two identical 16-byte plaintexts give identical ciphertext blocks | ECB; use the block structure (byte-at-a-time oracle, cut-and-paste) |
++| Attacker controls plaintext and IV | CBC bit-flipping of the block before the target |
++| Padding error distinguishable from decryption error | padding oracle (CBC); script it, one byte at a time |
++| Same keystream across messages | CTR nonce reuse: XOR two ciphertexts to cancel the keystream |
++| GCM nonce reused | recover the authentication key, then forge |
++| Length-extension-friendly hash (MD5/SHA1/SHA256) with `secret||msg` | `ctf-hashpump --mac MAC --data MSG --append EXTRA` (tries the key lengths; verify against the service) |
++
++## 4. Public key beyond RSA
++
++- ECDSA nonce reuse or bias: with two signatures on the same `k`,
++  `k = (z1 - z2) / (s1 - s2)`, then recover `d`; biased `k` needs a lattice
++  (LLL/HNP in sage).
++- ECC curve problems: singular curve, anomalous order (`#E = p`), small
++  subgroup/Pohlig-Hellman, invalid-curve points, small subgroup confinement.
++- DH/finite field: small subgroup, smooth-order modulus (Pohlig-Hellman),
++  shared exponent between sessions.
++
++## 5. PRNG and stream ciphers
++
++- MT19937: 624 consecutive 32-bit outputs let you clone the state; Python's
++  `random` and PHP's `mt_rand` variants differ in tempering/encoding.
++- LCG: three outputs give the parameters; check for modulus wraparound.
++- Timestamp/V8 seeds: brute force the small seed space first.
++- Keystream reuse in any stream cipher: XOR the two ciphertexts and look for
++  readable structure.
++
++## 6. Pitfalls
++
++- Attacking the math while the source code states the bug in one line.
++- Using a public write-up's parameters on a challenge with different ones.
++- Confusing "decryption produced printable bytes" with "the plaintext is
++  correct" — verify with a known structure (header, padding, hash).
++
++## Publish as Fact
++
++The primitive and parameters used, the exact algebraic relation exploited, the
++recovered key/plaintext, and the verification that proves the plaintext is the
++intended one.
+diff --git a/skills/muteki-ctf-local-playbook/references/forensics.md b/skills/muteki-ctf-local-playbook/references/forensics.md
+new file mode 100644
+index 0000000..bbf793e
+--- /dev/null
++++ b/skills/muteki-ctf-local-playbook/references/forensics.md
+@@ -0,0 +1,151 @@
++# Forensics
++
++## 0. Inventory and carving first
++
++```bash
++file *; exiftool -a -u * | head -60            # metadata often carries the hint
++binwalk -eM ./*.bin ./*.img 2>/dev/null; ls -R _*.extracted 2>/dev/null | head
++foremost -i image.dd -o out; 7z l suspicious.zip
++zsteg -a pic.png; pngcheck -v pic.png
++```
++
++Search the extracted tree for the payoff before going deeper:
++
++```bash
++rg -a -i 'flag|ctf|key|password|secret' . | head -30
++```
++
++## 1. Pcap / network forensics
++
++Start with the analyser, which does the mechanical work described below in one
++pass: reassembly in sequence order, frame detection (the repeated record magic
++and its stride), automatic pad derivation from forced plaintext, and validation
++of every carved object against its own checksum.
++
++```bash
++./toolbox/bin/ctf-net CAP --out carved/    # structure, pads, carving, honest verdict
++```
++
++It is designed to say "the pad is right and the IDAT is damaged at byte N"
++rather than to produce a plausible file that does not open. Only write a parser
++by hand when it reports no framing at all.
++
++1. `file` + `capinfos` / `tshark -q -z io,phs` to confirm the capture type.
++2. Conversations: `tshark -r CAP -q -z conv,tcp`.
++3. Follow the brief's port (or the busiest stream):
++   `tshark -r CAP -q -z follow,tcp,raw,N` and also `follow,tcp,ascii,N`.
++4. Reassemble to a real file — do not stop at hex dumps: decode the hex/raw
++   stream into `shared/stream0.bin`, then `file`/`strings`/`binwalk`.
++5. Extract protocol objects instead of hand-carving when possible:
++   `tshark -r CAP --export-objects http,out` (also `smb`, `tftp`, `imf`).
++6. Custom/unknown protocols: parse length-prefixed frames in python3; carve
++   embedded PE/ELF/ZIP/PNG by magic; write carved files under `shared/`.
++   Frame boundaries usually repeat a magic (`07 32`) and a length field, and the
++   record count is usually in the first frame - read the header layout off the
++   first two frames before writing a parser.
++7. Obfuscated payload inside the protocol: do not guess. Derive the pad from
++   plaintext you already know or can predict:
++
++   ```bash
++   # strip the frame headers into transfer.bin, then:
++   ctf-xor transfer.bin                     # tries common magics as known plaintext
++   ctf-xor transfer.bin --known 89504e470d0a1a0a --write out.bin
++   ```
++
++   The pad falls straight out (`pad[i] = cipher[i] XOR known[i]`). A **2-byte
++   repeating pad** is a common shape: with a NUL-padded field the raw filler
++   becomes the key pair repeated (`e9 f9`, `6c 4c`), so the filler both reveals
++   the pad and pins the alignment. Accept the pad only when it reproduces a
++   checksum the format already carries - PNG chunk CRCs, zlib, ZIP CRCs - and
++   check it against a chunk that is *not* the one you derived it from.
++
++Specialised passes:
++
++- DNS tunnel: `tshark -r CAP -Y dns -T fields -e dns.qry.name`, then decode the
++  encoded labels (usually base32/base64/hex) in the right order.
++- ICMP/payload smuggling: dump `icmp.data` fields and carve the payload.
++- USB HID: `tshark -r CAP -Y 'usb.capdata' -T fields -e usb.capdata`, map key
++  codes to characters (keyboard) or deltas (mouse).
++- TLS: look for a key log or a supplied private key; without one, check whether
++  the flag travels before the handshake (plain HTTP, FTP, DNS).
++- Credentials: `tshark -r CAP -Y 'ftp || http.authorization || telnet' -T fields`.
++
++Two failure modes here, and they are different in kind. Spraying single-byte XOR
++over a payload you cannot verify is guessing, and it burns the budget - that is
++forbidden. Deriving a pad from known plaintext and confirming it with the
++format's own checksum is evidence, and it is expected. When a payload looks
++random, confirm the reassembly and framing first, then ask what plaintext the
++format *forces* to be there (magic, fixed header, CRC, padding), and derive.
++
++A worked case: a 2015 CSAW capture carried a file transfer as 212-byte records
++(`<u16 total><u16 cookie><u16 magic 0732><u16 count><u32 reserved>` + 200-byte
++body) with a 2-byte alternating pad. Record 0 decoded byte-exact from the PNG
++magic alone; the IDAT CRC then proved the rest of the transfer was still damaged,
++which is what made the last mile a real question instead of a guess.
++
++## 2. Memory images
++
++```bash
++vol3 -f mem.raw banners ; vol3 -f mem.raw windows.info
++vol3 -f mem.raw windows.pslist | tail -20
++vol3 -f mem.raw windows.cmdline windows.consoles windows.filescan | head -60
++vol3 -f mem.raw windows.malfind ; vol3 -f mem.raw windows.netscan
++```
++
++Also worth two minutes: `strings -a mem.raw | rg -i 'flag\{|ctf\{'` and a
++`filescan` + `dumpfiles` pass restricted to suspicious names. For Linux images
++use `linux.pslist`, `linux.bash`, `linux.proc.Maps`.
++
++## 3. Disk images
++
++```bash
++fdisk -l disk.img ; mmls disk.img
++fls -r -o OFFSET disk.img | head -80 ; icat -o OFFSET disk.img INODE > out.bin
++photorec disk.img          # deleted-file carving last resort
++```
++
++Then look at: deleted files, filesystem journal, `~/.bash_history`, cron,
++`/etc/passwd|shadow`, browser SQLite history, SSH keys, and (Windows) registry
++hives via `regipy` — registry run keys, USB history, userassist.
++
++## 4. Stego and media
++
++- PNG/JPEG: `zsteg -a`, `stegseek pic.jpg /usr/share/wordlists/rockyou.txt`
++  (steghide), appended data after the EOF marker, EXIF/comments, chunk CRC
++  mismatch, palette anomalies, bit-plane/channel separation (`magick`).
++- Audio: spectrogram is usually the intended path
++  (`sox in.wav -n spectrogram -o spec.png` or `audacity`), plus DTMF/SSTV via
++  `multimon-ng`, and LSB in raw samples (compare with `soxi`).
++- Video: frame extraction (`ffmpeg -i v.mp4 frames/%04d.png`), motion between
++  frames, subtitle streams, unusual codec/data atoms.
++
++## 5. Documents and archives
++
++- Office: `olevba`, `msoffcrypto-tool`, unzip and read `word/document.xml`,
++  look for macros and hidden sheets.
++- PDF: `pdf-parser -a`, `pdfimages -all`, decompress streams (`qpdf --qdf`).
++- Password-protected archive: `zip2john`/`rar2john` + `john`/`hashcat`; a
++  short dictionary plus a mask is usually enough. Known-plaintext: `bkcrack`
++  (`bkcrack -C archive.zip -c known.txt -p plain.txt`), which is the maintained
++  descendant of pkcrack and runs on one known 12-byte plaintext region.
++- Nested archives: iterate `binwalk -eM` until the recursion is stable, list
++  every level before assuming it ends.
++
++## 6. Logs and timelines
++
++Access logs: find the anomalous request (`rg` on odd user agents, unusual paths,
++HTTP 200 on a normally 403 route), reconstruct the session, and decode any
++parameter that carries encoded data. Windows: `evtx_dump.py` for EVTX. Full
++timeline when the question is "when": `log2timeline`/`psort`.
++
++## 7. Pitfalls
++
++- Overwriting the evidence: always write carved output to new files.
++- Stopping at the first `binwalk` result while the flag was in the metadata.
++- Reassembling only `follow,tcp,ascii` and losing binary bytes.
++- Assuming an image is stego when its EXIF comment already answers the question.
++
++## Publish as Fact
++
++Which artifact, which tool and exact command, the stream/offset/inode, and the
++extracted file path under `shared/` that a later Worker can re-read.
+diff --git a/skills/muteki-ctf-local-playbook/references/misc.md b/skills/muteki-ctf-local-playbook/references/misc.md
+new file mode 100644
+index 0000000..ffc1c8c
+--- /dev/null
++++ b/skills/muteki-ctf-local-playbook/references/misc.md
+@@ -0,0 +1,95 @@
++# Misc
++
++## 1. Identify the layer stack
++
++Most misc challenges are layers, not puzzles: encoding over encoding, or a
++restricted interpreter. Remove one layer at a time and say which layer you
++removed.
++
++```bash
++file ./artifact; xxd -l 256 ./artifact
++python3 -c "import base64;print(base64.b64decode(open('c.txt').read()))"
++```
++
++Candidate layers: base16/32/58/64/85/91, hex, URL/HTML entities, gzip/zlib
++wrapped text, Morse, Bacon, A1Z26, Braille, ROT, "keyboard shift", emoji or
++symbol alphabets, tap code, book cipher, DNA codons, and esolangs
++(Whitespace, Ook, Brainfuck, JSFuck, Piet, Malbolge).
++
++Escalating from decoding to interpretation: if the text is a program in an
++esoteric language, run the interpreter instead of decoding by hand.
++
++If the bytes look random rather than encoded, stop guessing keys and derive the
++pad from plaintext the format forces to be present:
++
++```bash
++ctf-xor artifact.bin                    # assume a common magic at offset 0
++ctf-xor artifact.bin --known 504b0304   # e.g. you know a ZIP local header
++```
++
++A repeating 2-byte pad is common in game/CTF transports; a checksum match (PNG
++chunk CRC, zlib, ZIP CRC) is what turns a candidate key into a fact.
++
++## 2. Restricted interpreters (jails)
++
++Work out what is blocked, then what is still reachable. Enumerate, do not guess:
++
++```python
++# Python jail: list the surviving names and the import machinery
++print([n for n in dir(__builtins__) if not n.startswith('_')])
++print(type(__import__('os').system))
++```
++
++Recovery patterns:
++
++- Python: `__builtins__` via `().__class__.__base__.__subclasses__()`, reach
++  `os.system`/`subprocess.Popen`/`open`, or `breakpoint()` / `help()` when
++  audit hooks are absent. Filters on substrings are beaten by
++  `getattr(__builtins__, 'ev'+'al')`, `%c` formatting, or unicode escapes —
++  but confirm each bypass with a real run.
++- Bash restricted shell: `${PATH:0:1}`, `$'\x2f'`, command substitution,
++  `printf` to build strings, `read`/`exec` redirection, environment variables
++  set by the wrapper.
++- PHP: `preg_replace` with `/e` (legacy), `assert`, `create_function`,
++  variable functions, `$GLOBALS`, object injection into magic methods.
++- SQL jail: `information_schema` discovery, `LOAD_FILE`, stacked queries when
++  the driver allows them.
++- Rule: read the filter source if it is given. Never assume a filter's coverage.
++
++## 3. Programming and service challenges
++
++- Read the protocol by connecting once (`nc`), then write the solver; keep it in
++  `shared/` so a later Worker can re-run it.
++- Time limits: parallelise requests, precompute, and buffer output. Print raw
++  bytes when a parse fails.
++- Interview-style tasks (constrained puzzles, "answer N questions in T
++  seconds"): solve in code, verify against the checker locally when a checker
++  script is provided.
++
++## 4. Files, formats and OSINT-adjacent data
++
++- Barcodes/QR: `zbarimg`, then OCR (`tesseract`) for anything text-like. OCR
++  fails on small text: upscale first (`magick in.png -resize 400% -colorspace
++  Gray -threshold 50% big.png`) and OCR that. Two measured runs of the same
++  string: ~11 px font gave `ftagl0cr_1ad5_1mag3sl`, 34 px gave the exact flag.
++- Structured dumps: `jq`/`yq`/`sqlite3`/`csvkit` beat manual reading.
++- Weird sizes/headers: `binwalk`, `truncate`/`dd` at the reported offset,
++  `dd if=file bs=1 skip=N count=M`.
++- Unicode weirdness: check for zero-width characters, homoglyphs, RTL overrides
++  (`python3 -c "print([hex(ord(c)) for c in open('f').read()])"`).
++- Blockchains: replay the challenge's transactions, read the contract storage,
++  and confirm the state change rather than trusting the description.
++
++## 5. Pitfalls
++
++- Trying randomness: if a decode chain needs guessing, the intended hint is
++  usually in the challenge text, a filename, or a header value.
++- Hand-decoding a 5 kB blob instead of writing 10 lines of Python.
++- Running an untrusted binary from the challenge outside the sandbox you were
++  given, or on the host instead of the target.
++- Assuming a jail escape that was never executed: run it, print the output.
++
++## Publish as Fact
++
++The layer or filter model you established, the exact commands and their output,
++the artifact path in `shared/`, and what remains unverified in the chain.
+diff --git a/skills/muteki-ctf-local-playbook/references/pwn.md b/skills/muteki-ctf-local-playbook/references/pwn.md
+new file mode 100644
+index 0000000..17443af
+--- /dev/null
++++ b/skills/muteki-ctf-local-playbook/references/pwn.md
+@@ -0,0 +1,91 @@
++# Pwn
++
++## 1. Triage the binary and the protocol
++
++```bash
++file ./chall; checksec --file=./chall
++readelf -h ./chall | head -20; readelf -d ./chall | rg -i 'bind_now|now'
++strings -a -n 6 ./chall | rg -i 'flag|/bin/sh|system|win'
++ldd ./chall; ./chall          # learn the exact I/O protocol before anything else
++```
++
++Do not write an exploit before you know: how input is read (line/raw/length),
++what is printed back, and whether it loops or exits.
++
++## 2. Protection matrix to exploitation path
++
++| Protections | First path to try |
++| --- | --- |
++| NX disabled | shellcode on stack/heap, jump to buffer |
++| No PIE, no canary, NX on | ret2win / ret2plt, plain ROP |
++| Canary | leak it (format string, `puts` of adjacent data, off-by-one) before overflow |
++| PIE | leak code base first (GOT read, format string, partial overwrite) |
++| Partial RELRO | GOT overwrite (`printf@got` -> `system`) |
++| Full RELRO | GOT readonly: ret2libc, `one_gadget`, or FSOP/exit handlers on modern glibc |
++| Static binary | `ROPgadget --binary ./chall`, syscall gadgets, `read(0, bss)` staging |
++| seccomp | `seccomp-tools dump ./chall`, then ORW ROP chain instead of `execve` |
++
++## 3. Offset and primitive discovery
++
++```bash
++python3 -c "from pwn import *; print(cyclic(200))" | ./chall        # find crash offset
++gdb -q ./chall -ex 'run < payload' -ex 'info registers' -ex 'bt'
++r2 -A ./chall -c 'afl; pdf @ main; iz' ; objdump -d -M intel ./chall | head -100
++checksec --file=./chall; one_gadget ./libc.so.6
++```
++
++Workflow order that saves time: identify the bug class (`objdump`/decompiler on
++the parse function) -> find the offset with `cyclic` -> build the minimal
++control-flow proof (crash with `0x41414141` in `RIP`) -> then spend the exploit
++effort.
++
++## 4. Leaks, libc and chains
++
++- Identify the remote libc before assuming offsets: leak a GOT entry via
++  `puts`/`printf`, then resolve with a libc database; use the challenge's own
++  `libc.so.6` when supplied (`./libc.so.6` prints its version).
++- `libc_base = leaked_address - symbol_offset`; then `system`, `/bin/sh`, and
++  gadgets come from the same libc.
++- `one_gadget ./libc.so.6` gives single-gadget shortcuts; the constraints are
++  real — check them in gdb, do not assume they hold.
++- Format string: find the argument offset with `AAAA.%p.%p...` or `%6$p`,
++  read with `%s` on a pointer you control, write with `%hn` split half-words.
++- Heap (older glibc): tcache/fastbin dup and poisoning, unsorted-bin libc leak,
++  `__free_hook`/`__malloc_hook` overwrite. glibc 2.32+ adds safe-linking (you
++  need a heap leak to forge pointers); 2.34+ removes the hooks, so plan FSOP or
++  a `_IO`/exit-handler target instead.
++
++pwntools skeleton to adapt (keep the local/remote switch so the same script
++validates both):
++
++```python
++from pwn import *
++context.binary = elf = ELF('./chall'); libc = ELF('./libc.so.6')
++p = process('./chall') if not args.REMOTE else remote('host', 1337)
++p.recvuntil(b'> ')
++p.sendline(payload_stage1)
++leak = u64(p.recvline().strip().ljust(8, b'\x00'))
++libc.address = leak - libc.sym['puts']
++```
++
++## 5. Remote-specific behaviour
++
++- ASLR means a leak from one connection is void on the next: leak and use the
++  same connection.
++- Confirm the remote libc/build matches your local assumption (a wrong libc
++  offset is the most common "exploit suddenly fails" cause).
++- Set a timeout and handle EOF; print raw bytes hex when a stage fails instead
++  of guessing the protocol.
++
++## 6. Pitfalls
++
++- Exploiting before confirming the offset.
++- Assuming `system("/bin/sh")` when seccomp blocks `execve` — check first.
++- Forgetting `.recvuntil` alignment, or `sendline` versus `send` for raw reads.
++- Losing the leaked value by opening a second connection.
++
++## Publish as Fact
++
++File hash/protections, the bug class with the responsible function and offset,
++the crash control proof (register value), the leak path with its value, and a
++path to the exploit script in `shared/`.
+diff --git a/skills/muteki-ctf-local-playbook/references/reverse.md b/skills/muteki-ctf-local-playbook/references/reverse.md
+new file mode 100644
+index 0000000..08eb3c9
+--- /dev/null
++++ b/skills/muteki-ctf-local-playbook/references/reverse.md
+@@ -0,0 +1,84 @@
++# Reverse
++
++## 1. Identify what you are actually looking at
++
++```bash
++file ./chall; strings -a -n 6 ./chall | head -60
++exiftool ./chall; binwalk ./chall
++go version -m ./chall 2>/dev/null        # Go build info
++```
++
++Language/toolchain fingerprints that decide the workflow:
++
++| Fingerprint | Workflow |
++| --- | --- |
++| Go build info, large static binary | symbols usually intact: `go tool objdump`, `r2`, string-driven |
++| Rust panic strings (`panicked at`) | symbols frequently stripped; focus on string xrefs and data flow |
++| `.NET` (`dnfile`, `mscoree`) | `ilspycmd`/dnSpy decompile to near-source |
++| Java jar/class | `jar tf`, `jadx`, `cfr` |
++| PyInstaller / `.pyc` | `pyinstxtractor` then `pycdc`/`decompyle3`; match the Python version |
++| Android APK | `apktool d`, `jadx -d`, check native `.so` too |
++| WASM | `wasm2wat`, `wasm-decompile` |
++| Clear UPX marker / high entropy sections | `upx -d` first, else unpack manually |
++
++## 2. Static pass
++
++```bash
++r2 -A ./chall -c 'afl; s main; pdf; izz'
++ghidraRun            # or analyzeHeadless for scripted decompilation
++objdump -d -M intel ./chall | less
++```
++
++Read the comparison that decides "correct/wrong": trace back from
++`strcmp`/`memcmp`/`strncmp`, note the transform applied to the input, then
++decide whether the transform is invertible (write the inverse) or satisfiable
++(hand it to z3).
++
++For stripped binaries, locate `main` through `__libc_start_main`'s first
++argument, or start from `write`/`puts` xrefs and walk backwards to the caller.
++
++## 3. Dynamic pass
++
++```bash
++ltrace -s 200 ./chall ; strace -f -s 200 ./chall
++gdb -q ./chall -ex 'break strcmp' -ex 'run' -ex 'x/s $rdi' -ex 'x/s $rsi'
++LD_PRELOAD=./hook.so ./chall       # hook the comparison and dump both operands
++python3 -c "import angr; p=angr.Project('./chall'); ..."    # symbolic find/avoid
++```
++
++Dynamic beats static when: the algorithm is long, the binary self-modifies, or
++the checker runs a large loop. Symbolic execution (angr) is the right tool when
++the check is branchy with few variables — keep the find/avoid addresses tight,
++it is slow when over-constrained.
++
++Anti-analysis handling: single-step past `ptrace(PTRACE_TRACEME)` checks, patch
++the anti-debug branch, or skip the timing loop. Note that a patched local copy
++is evidence about your copy, not about the original — verify the flag against
++the original if the environment allows.
++
++## 4. Common patterns and their inverse
++
++- Byte-wise XOR with a fixed or derived key: recover the key from a
++  known-plaintext region (e.g. the flag prefix).
++- Compare-after-transform: invert the transform (`z3` if it is bit-twiddling
++  with mixed arithmetic).
++- Multi-stage: a first input unlocks a second check; dump each stage's expected
++  value rather than reconstructing by hand.
++- "Key" derived from input: feed a self-consistent input, or symbolically solve
++  for a satisfying assignment instead of a fixed answer.
++- Embedded data: appended archives, an encrypted blob decrypted with a literal
++  key inside the binary (`strings` first, then xrefs to the literal).
++
++## 5. Pitfalls
++
++- Treating `strings` output as an answer; it usually shows the *hint*, not the
++  flag (or it shows a decoy).
++- Assuming packer/obfuscation when the binary is simply stripped.
++- Running someone else's solver on a different version/build of the challenge.
++- Forgetting that a `.pyc`/jar may contain a second stage in a resource file.
++
++## Publish as Fact
++
++Toolchain/version, the responsible function or comparison, the recovered
++transform (as an equation or pseudocode), the input that passes, and the exact
++bytes of the artifact you recovered.
+diff --git a/skills/muteki-ctf-local-playbook/references/web.md b/skills/muteki-ctf-local-playbook/references/web.md
+new file mode 100644
+index 0000000..edadd99
+--- /dev/null
++++ b/skills/muteki-ctf-local-playbook/references/web.md
+@@ -0,0 +1,101 @@
++# Web
++
++## 1. Map the application before attacking it
++
++```bash
++whatweb -a3 http://TARGET/ ; curl -sS -D- -o/dev/null http://TARGET/
++curl -sS http://TARGET/robots.txt http://TARGET/sitemap.xml | head -40
++ffuf -u http://TARGET/FUZZ -w /usr/share/seclists/Discovery/Web-Content/raft-small-words.txt -mc all -fs 0
++```
++
++Record: tech stack, routes, parameters, auth model, session cookie format,
++error page behaviour, whether responses differ per role. Read the frontend:
++`view-source`, JS bundles (`rg -o '"/[a-zA-Z0-9_/.-]+"'`), comments, source
++maps, `.git/`, `.svn/`, `.DS_Store`, `*.bak`, `*.swp`, `phpinfo.php`.
++
++Then enumerate every input the model controls: query params, body (form/JSON),
++headers (`X-Forwarded-For`, `Host`, `Referer`), cookies, path segments, upload
++filenames, and any second-order storage (profiles, tickets, logs).
++
++## 2. Choose the class from the observed behaviour
++
++| Signal | Class | Cheapest decisive test |
++| --- | --- | --- |
++| Input reflected in the page | XSS | canary string, check the exact context (HTML/attr/JS/URL) |
++| String/numeric into a query | SQLi | `'` then `''`, then boolean pair `AND 1=1` / `AND 1=2` |
++| Numeric object id, another user's data visible | IDOR/BOLA | change the id, compare response bodies byte-wise |
++| `{{7*7}}`, `${7*7}`, `<%= 7*7 %>` executed | SSTI | arithmetic canary, then identify the engine |
++| Parameter used to fetch a URL | SSRF | loopback and internal-port probe, cloud metadata only if the range allows |
++| XML body accepted | XXE | entity referencing a local file, then OOB if inline is blocked |
++| Java `.rO0`/`AC ED`, PHP `O:`, pickle, .NET binary | Deserialization | build the gadget only after the type is confirmed |
++| Upload accepted | File upload | content-type/extension/polyglot matrix, read-back path |
++| Shell-ish parameter (`ping`, `convert`, `nslookup`) | Command injection | timing canary `; sleep 3` vs `&` vs `$(sleep 3)` |
++| JWT in cookie/header | JWT | decode, try `alg=none`, then HS/RS confusion, then `kid` injection |
++| Path traversal accepted | LFI/RFI | `../../etc/passwd`, then `php://filter/convert.base64-encode/resource=index.php` |
++| Single-use token, limited stock, vote/claim | Race condition | 20 parallel requests in one batch, compare winners |
++
++## 3. Manual proof before automation
++
++Prove the primitive with `curl` first. sqlmap, ffuf and nuclei amplify a
++confirmed finding; they do not create one, and an ambiguous tool "hit" wastes a
++Worker.
++
++```bash
++curl -sS 'http://TARGET/item?id=1%27'            # error text = likely SQLi
++curl -sS 'http://TARGET/item?id=1 AND 1=2'       # boolean difference
++curl -sS -o /dev/null -w '%{time_total}\n' 'http://TARGET/x?f=;sleep 3'   # timing
++```
++
++Useful extensions of a confirmed primitive:
++
++- SQLi: `ORDER BY n` for column count, then UNION with `NULL`s; only after the
++  manual UNION works, run sqlmap with `--technique` narrowed.
++- LFI: PHP filter chain generator for arbitrary-content includes, log poisoning
++  (`access.log` via `User-Agent`), `/proc/self/environ`, session files.
++- SSTI: fingerprint engine (Jinja2/Twig/Freemarker/Velocity) by syntax, then
++  reach for RCE only if the target is in scope for it.
++- SSRF: allowlist bypass with decimal/octal IPs, `@`-style URLs, redirects,
++  DNS rebinding; distinguish "response returned" from "request delivered"
++  (use an out-of-band listener you control).
++- JWT: `hashcat -m 16500 jwt.txt wordlist` for weak HMAC secrets, `jwt_tool`
++  for the structural attacks.
++- Race: repeated parallel batches, not just one; report the actual interleaving.
++
++## 4. Flag locations to check once you can read
++
++Environment variables, `/flag`, `/flag.txt`, application config and `.env`,
++database tables/columns dumped by the injection, admin-only routes, template
++and source comments, upload directories, and any file read primitive (LFI,
++SSRF-to-file, XXE, deserialization file read).
++
++## 5. Pitfalls
++
++- A `500` or `403` is evidence about one request, not proof the target is down
++  or the route unreachable.
++- **Never call a service dead without a direct measurement.** An HTTP client
++  getting nothing back means the service is not speaking HTTP, which is not the
++  same thing. Confirm liveness out of band, then read the raw banner:
++
++  ```bash
++  nc -vz HOST PORT                          # TCP reachability, the real test
++  python3 -c 'import socket;s=socket.create_connection(("HOST",PORT),5);print(s.recv(4096))'
++  ```
++
++  A banner that describes a puzzle ("solve a sha1 sum ending in 24 bits set to
++  one") is the protocol's first required step, not a broken service: the client
++  must solve it before it may speak. Budget for it - a 24-bit search is seconds
++  to a couple of minutes in a tight loop, not a reason to abandon the challenge.
++  Concluding "the container died" from a failed HTTP request wastes the whole
++  Step; report the exact symptom instead.
++- Rate limiting and WAF blocks look like "no vulnerability"; compare raw and
++  encoded payloads before concluding.
++- A flag-shaped string on a public page is usually a decoy; confirm it through
++  the intended primitive.
++- Do not spend a Step on generic scanning after a specific primitive is
++  confirmed — follow the primitive.
++
++## Publish as Fact
++
++Exact request (method, path, params, headers, body), the exact response slice,
++status code, and the boundary of the primitive (which input, which privilege,
++what still is untested).
