@@ -1,0 +1,5 @@
+# Keep line endings predictable across platforms. Without this, a Windows clone
+# with core.autocrlf=true turns the shell scripts into CRLF files and they die
+# inside WSL/Kali with "/bin/bash^M: bad interpreter".
+* text=auto eol=lf
+*.cmd text eol=crlf

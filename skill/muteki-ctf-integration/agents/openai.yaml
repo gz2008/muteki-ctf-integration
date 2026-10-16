@@ -1,0 +1,4 @@
+interface:
+  display_name: "Muteki CTF Integration"
+  short_description: "Run Muteki with the local ctf-kali toolchain"
+  default_prompt: "Use the local Muteki and ctf-kali integration for an authorized CTF challenge."

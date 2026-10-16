@@ -1,0 +1,10 @@
+# Runtime artefacts. Everything listed here is reproducible from locks/ and the
+# scripts under scripts/, and none of it belongs in a git history.
+muteki-tool-root/
+archives/
+index/
+bench/
+.tmp/
+
+# Local logs and scratch files
+*.log

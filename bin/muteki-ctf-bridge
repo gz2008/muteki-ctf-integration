@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Operator entry point for the Muteki CTF integration.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DISTRO="${CTF_KALI_DISTRO:-ctf-kali}"
+WSL_EXE="/mnt/c/Windows/System32/wsl.exe"
+SUITE_ROOT="${CTF_SUITE_ROOT:-/mnt/d/codex/ctf-suite}"
+MUTEKI_ROOT="${MUTEKI_ROOT:-/mnt/d/codex/output/muteki}"
+
+usage() {
+  cat <<'USAGE'
+Usage: muteki-ctf-bridge <command> [args]
+
+Commands:
+  doctor                 Run the ctf-kali CTF toolchain doctor
+  validate               Validate ctf-suite reports, manifests, and paths
+  shell                  Open the ctf-kali shell as ctf
+  exec <cmd> [args...]   Run one command inside ctf-kali
+  new --category C --name N [--target URL]
+                         Create a scoped challenge workspace
+  scope --scope FILE --host HOST [--port PORT]
+                         Check a target against challenge scope
+  journal --path DIR     Append a challenge to the CTF knowledge index
+  env                    Print Muteki integration environment exports
+  status                 Show integration and Muteki source locations
+USAGE
+}
+
+run_kali() {
+  if [ -x /init ] && [ -x "$WSL_EXE" ]; then
+    exec /init "$WSL_EXE" "$WSL_EXE" -d "$DISTRO" -u "${CTF_KALI_USER:-ctf}" -- "$@"
+  fi
+  exec "$WSL_EXE" -d "$DISTRO" -u "${CTF_KALI_USER:-ctf}" -- "$@"
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+  help|-h|--help) usage ;;
+  doctor) run_kali /opt/ctf/bin/ctf-doctor "$@" ;;
+  validate) run_kali /opt/ctf/bin/ctf-validate "$@" ;;
+  shell) exec "$WSL_EXE" -d "$DISTRO" -u "${CTF_KALI_USER:-ctf}" --cd '~' ;;
+  exec)
+    [ "$#" -ge 1 ] || { echo "exec requires a command" >&2; exit 64; }
+    exec "$ROOT/bin/muteki-ctf-exec" "$@"
+    ;;
+  new) run_kali /opt/ctf/bin/ctf-new "$@" ;;
+  scope) run_kali /opt/ctf/bin/ctf-scope "$@" ;;
+  journal) run_kali /opt/ctf/bin/ctf-journal "$@" ;;
+  env)
+    cat <<EOS
+export MUTEKI_LOCAL_WORKER_ROOT="$ROOT/muteki-tool-root"
+export MUTEKI_CTF_BRIDGE_ROOT="$ROOT"
+export CTF_SUITE_ROOT="$SUITE_ROOT"
+export MUTEKI_ROOT="$MUTEKI_ROOT"
+EOS
+    ;;
+  status)
+    cat <<EOS
+integration=$ROOT
+distribution=$DISTRO
+ctf_suite=$SUITE_ROOT
+muteki_source=$MUTEKI_ROOT
+tool_root=$ROOT/muteki-tool-root
+EOS
+    ;;
+  *) echo "unknown command: $cmd" >&2; usage >&2; exit 64 ;;
+esac

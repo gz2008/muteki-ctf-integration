@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "updated": "2026-10-15",
+  "notes": [
+    "Pinned offline CTF corpora for the Muteki local tool root.",
+    "Muteki local workers project this tree as ./toolbox; the layout matches muteki/solver/workspace.py _CONTAINER_DIR_CANDIDATES.",
+    "Third-party text stays local; it is never vendored into the AGPL-3.0 muteki repository.",
+    "Windows: add this checkout to the Defender exclusion list before fetching. Payload-bearing PoC documents inside these corpora match generic webshell signatures and were quarantined mid-extraction on 2026-10-16 until a scoped exclusion was added. Scope the exclusion to this repository only.",
+    "tool_root and archive_root record the paths of the machine these corpora were pinned on. They do not exist in a fresh clone, and fetch-knowledge.ps1 then falls back to <repo>/muteki-tool-root and <repo>/archives/knowledge."
+  ],
+  "tool_root": "D:\\codex\\output\\muteki-ctf-integration\\muteki-tool-root",
+  "archive_root": "D:\\codex\\output\\muteki-ctf-integration\\archives\\knowledge",
+  "entries": [
+    {
+      "name": "PayloadsAllTheThings",
+      "repository": "swisskyrepo/PayloadsAllTheThings",
+      "ref": "master",
+      "commit": "3ac27901c711bdf3f5b65a7b1d1820a1f65bd09a",
+      "target": "knowledges/PayloadsAllTheThings",
+      "license": "MIT",
+      "strip_root": false,
+      "verify": { "path": "README.md", "phrase": "SQL Injection", "min_files": 100 }
+    },
+    {
+      "name": "InternalAllTheThings",
+      "repository": "swisskyrepo/InternalAllTheThings",
+      "ref": "main",
+      "commit": "203bb0c0b290bf7c9158c32d43523b8d66f292c1",
+      "target": "knowledges/InternalAllTheThings",
+      "license": "NOASSERTION (local use only)",
+      "strip_root": false,
+      "verify": { "path": "README.md", "phrase": "Kerberoasting", "min_files": 50 }
+    },
+    {
+      "name": "hacktricks",
+      "repository": "HackTricks-wiki/hacktricks",
+      "ref": "master",
+      "commit": "09d8a81895ac02ca1b19e407b735fdfa2738172d",
+      "target": "knowledges/hacktricks",
+      "license": "NOASSERTION (local use only)",
+      "strip_root": false,
+      "verify": { "path": "src/README.md", "phrase": "Privilege Escalation", "min_files": 500 }
+    },
+    {
+      "name": "hacktricks-cloud",
+      "repository": "HackTricks-wiki/hacktricks-cloud",
+      "ref": "master",
+      "commit": "35a85d06f2aad5dd6c4e1fab3c74b5c12285ea9b",
+      "target": "knowledges/hacktricks-cloud",
+      "license": "NOASSERTION (local use only)",
+      "strip_root": false,
+      "verify": { "path": "README.md", "phrase": "Azure", "min_files": 200 }
+    },
+    {
+      "name": "how2heap",
+      "repository": "shellphish/how2heap",
+      "ref": "master",
+      "commit": "02da6aa26a44e5af2a67057876d7c6669a207f56",
+      "target": "knowledges/how2heap",
+      "license": "MIT",
+      "strip_root": false,
+      "verify": { "path": "README.md", "phrase": "tcache", "min_files": 50 }
+    },
+    {
+      "name": "vulhub",
+      "repository": "vulhub/vulhub",
+      "ref": "master",
+      "commit": "8fd63916f7a8711e2e01dda0d27237e4d6175d38",
+      "target": "pocs/vulhub",
+      "license": "MIT",
+      "strip_root": false,
+      "verify": { "path": "README.md", "phrase": "struts", "min_files": 200 }
+    },
+    {
+      "name": "Awesome-POC",
+      "repository": "Threekiii/Awesome-POC",
+      "ref": "master",
+      "commit": "0f9e22b660cb1ea12c1c3668f9128d93e08da412",
+      "target": "pocs/Awesome-POC",
+      "license": "NOASSERTION (local use only)",
+      "strip_root": false,
+      "verify": { "path": "README.md", "phrase": "反序列化", "min_files": 100 }
+    },
+    {
+      "name": "ctf-wiki",
+      "repository": "ctf-wiki/ctf-wiki",
+      "ref": "master",
+      "commit": "e225ddfcd420a7f54a5940f47336ebdf8c29b875",
+      "target": "knowledges/ctf-wiki",
+      "license": "CC-BY-NC-SA-4.0 (declared in LICENSE; local non-commercial use, not redistributed)",
+      "strip_root": false,
+      "verify": { "path": "docs/zh/docs/crypto/asymmetric/rsa/rsa_coppersmith_attack.md", "phrase": "Coppersmith", "min_files": 100 }
+    },
+    {
+      "name": "nuclei-templates",
+      "repository": "projectdiscovery/nuclei-templates",
+      "ref": "main",
+      "commit": "3de629d823bb6eb00aa3769edc365b6525134fb1",
+      "target": "nuclei-templates",
+      "license": "MIT",
+      "strip_root": true,
+      "verify": { "path": "http", "phrase": "id: ", "min_files": 5000 }
+    }
+  ],
+  "wordlists": {
+    "seclists": {
+      "source": "ctf-kali:/usr/share/seclists",
+      "target": "wordlists/SecLists",
+      "mode": "symlink",
+      "fallback_mode": "copy-subset",
+      "fallback_subdirs": [
+        "Discovery/Web-Content",
+        "Discovery/DNS",
+        "Passwords",
+        "Usernames",
+        "Fuzzing"
+      ],
+      "checks": [
+        { "name": "raft-medium-directories", "metric": "RAFT_LINES", "path": "Discovery/Web-Content/raft-medium-directories.txt", "min_lines": 25000 },
+        { "name": "xato-10-million-1000000", "metric": "XATO_LINES", "path": "Passwords/Common-Credentials/xato-net-10-million-passwords-1000000.txt", "min_lines": 1000000 }
+      ]
+    },
+    "rockyou": {
+      "source": "ctf-kali apt package wordlists (/usr/share/wordlists/rockyou.txt.gz)",
+      "target": "wordlists/kali/rockyou.txt",
+      "min_lines": 14000000
+    }
+  }
+}

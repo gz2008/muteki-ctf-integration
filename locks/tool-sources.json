@@ -1,0 +1,249 @@
+{
+  "version": 1,
+  "updated": "2026-10-16",
+  "notes": [
+    "Pinned tools and data that close the local CTF tool gaps of the ctf-kali runtime.",
+    "Hashes for ysoserial, marshalsec, JNDI-Injection-Exploit and StegSolve are the ones the upstream muteki worker Dockerfile (docker/worker/Dockerfile) pins; our downloaded bytes match them exactly.",
+    "Installed inside ctf-kali; the Muteki tool root exposes them through ./toolbox/bin wrappers."
+  ],
+  "asset_root": "D:\\codex\\output\\muteki-ctf-integration\\archives\\releases",
+  "assets": [
+    {
+      "name": "ysoserial",
+      "repository": "frohoff/ysoserial",
+      "tag": "v0.0.6",
+      "asset": "ysoserial-all.jar",
+      "sha256": "2c9bddd6a1a4ec66c1078ea97dacb61eb66d1c41aec7b6d21e3c72214ce170f1",
+      "install": "/opt/ctf/tools/ysoserial-all.jar",
+      "launcher": "ysoserial",
+      "license": "MIT"
+    },
+    {
+      "name": "marshalsec",
+      "repository": "RandomRobbieBF/marshalsec-jar",
+      "ref": "master",
+      "asset": "marshalsec-0.0.3-SNAPSHOT-all.jar",
+      "sha256": "524115cfae28f11759856f2e10946305d686b018a85a01642b436ee28cbb52af",
+      "install": "/opt/ctf/tools/marshalsec.jar",
+      "launcher": "marshalsec",
+      "license": "MIT (mbechler/marshalsec)"
+    },
+    {
+      "name": "JNDI-Injection-Exploit",
+      "repository": "welk1n/JNDI-Injection-Exploit",
+      "tag": "v1.0",
+      "asset": "JNDI-Injection-Exploit-1.0-SNAPSHOT-all.jar",
+      "sha256": "53517fdc0d386c7dfd4546e9e83150f85dab0662dbcaf9bf0f9dd82fab3a07e9",
+      "install": "/opt/ctf/tools/jndi-injection-exploit.jar",
+      "launcher": "jndi-exploit",
+      "license": "MIT"
+    },
+    {
+      "name": "StegSolve",
+      "repository": "Giotino/stegsolve",
+      "tag": "v1.4",
+      "asset": "StegSolve-1.4.jar",
+      "sha256": "2cc24c81d6731b9e5672d2e7ec129378705dfc9a87024c7a24ae740d5efa404f",
+      "install": "/opt/ctf/tools/stegsolve.jar",
+      "launcher": "stegsolve",
+      "license": "MIT"
+    },
+    {
+      "name": "evtx_dump",
+      "repository": "omerbenamram/evtx",
+      "tag": "v0.12.3",
+      "asset": "evtx_dump-v0.12.3-x86_64-unknown-linux-gnu",
+      "sha256": "a64220cd31e006b4d37c90adb6cca776120f463953b59de71a8089563307b937",
+      "install": "/opt/ctf/bin/evtx_dump",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "foundry",
+      "repository": "foundry-rs/foundry",
+      "tag": "v1.8.5",
+      "asset": "foundry_v1.8.5_linux_amd64.tar.gz",
+      "sha256": "6c66ffcc55fa4249197721baa3098bc208014ea1d8aa04b2ed50ac6bccffb226",
+      "sha256_source": "official foundry_v1.8.5_linux_amd64.sha256 asset",
+      "install": "/opt/ctf/foundry (forge, cast, anvil, solar; foundry's own chisel is exposed as fchisel)",
+      "license": "MIT/Apache-2.0"
+    },
+    {
+      "name": "chainsaw",
+      "repository": "WithSecureOpenSource/chainsaw",
+      "tag": "v2.17.1",
+      "asset": "chainsaw_x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "fc25f1eafbbff3e858d8dfba508d5e227bb56ef4dccc4d5cd0bbd6e49798cb4f",
+      "install": "/opt/ctf/chainsaw",
+      "license": "GPL-3.0"
+    },
+    {
+      "name": "hayabusa",
+      "repository": "Yamato-Security/hayabusa",
+      "tag": "v4.2.0",
+      "asset": "hayabusa-4.2.0-lin-x64-gnu.zip",
+      "sha256": "955d483adf2e952cdeed06a4057b81acd11dd8c208e18f1f5c8eb37cc09b6d1c",
+      "install": "/opt/ctf/hayabusa",
+      "license": "AGPL-3.0"
+    },
+    {
+      "name": "chisel-target-binaries",
+      "repository": "jpillora/chisel",
+      "tag": "v1.12.0",
+      "assets": [
+        { "asset": "chisel_1.12.0_linux_amd64.gz", "sha256": "f3f180f1d93aa72cce4e6386f98cc06569a0146fbd65eb4423cf83e6434bcfe6" },
+        { "asset": "chisel_1.12.0_linux_arm64.gz", "sha256": "2ec6152cd2c74fe0146d4d79e4e7aa174521368c56e433d55e023a92ea404ec3" }
+      ],
+      "install": "<tool-root>/tools/target-binaries/chisel-linux-{amd64,arm64}",
+      "license": "MIT",
+      "note": "The Kali package provides the tunnel client; these are the static binaries uploaded to a controlled target."
+    },
+    {
+      "name": "cloudfox",
+      "repository": "BishopFox/cloudfox",
+      "tag": "v2.0.5",
+      "asset": "cloudfox-linux-amd64.zip",
+      "sha256": "3cdc5a1a94ff14eb8df04d3dc8f9eca7db232a1315ceb8a7de26e4cb13e32fd5",
+      "install": "/opt/ctf/bin/cloudfox",
+      "license": "MIT"
+    },
+    {
+      "name": "bkcrack",
+      "repository": "kimci86/bkcrack",
+      "tag": "v1.8.1",
+      "asset": "bkcrack-1.8.1-Linux-x86_64.tar.gz",
+      "sha256": "45dc7d81adbaaad5c0aa2d8615ea920fd08b732fda1ea945504e0a3e8dc1d2ab",
+      "install": "/opt/ctf/bin/bkcrack",
+      "launcher": "bkcrack",
+      "license": "zlib",
+      "note": "Known-plaintext attack on ZipCrypto archives; replaces the unmaintained pkcrack the playbooks name."
+    },
+    {
+      "name": "cfr",
+      "repository": "leibnitz27/cfr (jar published to Maven Central as org.benf:cfr)",
+      "version": "0.152",
+      "asset": "cfr-0.152.jar",
+      "url": "https://repo1.maven.org/maven2/org/benf/cfr/0.152/cfr-0.152.jar",
+      "sha256": "f686e8f3ded377d7bc87d216a90e9e9512df4156e75b06c655a16648ae8765b2",
+      "install": "/opt/ctf/tools/cfr-0.152.jar",
+      "launcher": "cfr",
+      "license": "MIT",
+      "note": "JVM bytecode decompiler; jadx covers Android and ilspycmd covers .NET, CFR covers plain .class/.jar."
+    },
+    {
+      "name": "kerbrute",
+      "repository": "ropnop/kerbrute",
+      "tag": "v1.0.3",
+      "asset": "kerbrute_linux_amd64",
+      "sha256": "710a9d2653c8bd3689e451778dab9daec0de4c4c75f900788ccf23ef254b122a",
+      "install": "/opt/ctf/bin/kerbrute",
+      "launcher": "kerbrute",
+      "license": "Apache-2.0",
+      "note": "AD username enumeration and pre-auth (AS-REP) brute forcing; the corpora describe the technique, this is what performs it."
+    },
+    {
+      "name": "openstego",
+      "repository": "syvaidya/openstego",
+      "tag": "openstego-0.8.6",
+      "asset": "openstego-0.8.6.zip",
+      "sha256": "402ba4190d329564996a1250b9096f0402452042469f517545c312527cedc41f",
+      "install": "/opt/ctf/tools/openstego.jar",
+      "launcher": "openstego",
+      "license": "Apache-2.0",
+      "note": "LSB steganography for PNG/JPEG; the smoke test embeds and recovers a message to prove the jar works."
+    }
+  ],
+  "builds": [
+    {
+      "name": "pwninit",
+      "repository": "io12/pwninit",
+      "tag": "3.3.3",
+      "method": "cargo install --git https://github.com/io12/pwninit --tag 3.3.3 --root /opt/ctf --locked",
+      "install": "/opt/ctf/bin/pwninit",
+      "requires": ["cargo", "liblzma-dev", "pkg-config"],
+      "license": "MIT"
+    },
+    {
+      "name": "stegoveritas",
+      "method": "pip install stegoveritas",
+      "install": "/opt/ctf/venvs/core/bin/stegoveritas",
+      "license": "MIT"
+    },
+    {
+      "name": "pycdc",
+      "repository": "zrax/pycdc",
+      "commit": "b4289760970dbc399684f1e155ec6d1ea1cc787e",
+      "method": "cmake -DCMAKE_BUILD_TYPE=Release . && make -j4",
+      "install": "/opt/ctf/bin/pycdc, /opt/ctf/bin/pycdas",
+      "requires": ["cmake", "clang"],
+      "license": "GPL-3.0"
+    }
+  ],
+  "apt_packages": [
+    "jadx", "apktool", "dex2jar", "aapt", "apksigner", "adb", "wpscan", "ncat", "chisel",
+    "clang", "cmake", "python3-dev", "maven", "zstd", "liblzma-dev", "pkg-config", "wordlists",
+    "gqrx-sdr", "openocd", "pulseview", "sigrok", "rtl-433", "gnuradio",
+    "tesseract-ocr", "tesseract-ocr-eng", "smbclient", "smbmap", "netexec", "sqlite3",
+    "tftp-hpa", "wabt", "multimon-ng", "gmp-ecm", "yq", "photorec", "detect-it-easy"
+  ],
+  "pip_packages": [
+    "stegoveritas", "uncompyle6", "decompyle3", "pyinstaller", "semgrep", "slither-analyzer", "vyper",
+    "pacu", "scoutsuite", "prowler", "cloudsplaining", "certipy-ad", "pyocd", "unblob", "pymodbus",
+    "volatility3", "fpylll", "cysignals", "regipy", "dnfile", "csvkit", "pycryptodomex", "hashpumpy",
+    "pypykatz", "vmlinux-to-elf", "pefile", "apkleaks"
+  ],
+  "batch5_basis": {
+    "why": "Same audit method, second candidate sweep: AD credential tooling, kernel-pwn symbol recovery, PE parsing and stego details that the first sweep did not cover. Every entry was verified to be absent before it was added, and each addition has a functional check in scripts/smoke-tools.sh.",
+    "notable": [
+      "kerbrute enumerates and pre-auth-brutes AD usernames, which the corpus describes but the image could not do",
+      "pypykatz parses LSASS dumps and registry hives offline, the Linux-side counterpart of mimikatz",
+      "vmlinux-to-elf turns a stripped bzImage into a symbolised ELF, the entry point of every kernel-pwn challenge",
+      "diec + pefile cover packer/PE identification; openstego is proven by an embed/extract round trip"
+    ]
+  },
+  "batch4_basis": {
+    "why": "The gap list comes from auditing the tool names the CTF playbooks themselves reference, not from guessing: scripts/playbook-tool-audit.sh prints what is named but not callable, and scripts/smoke-tools.sh runs each replacement on a real input before it counts as done.",
+    "notable": [
+      "tesseract closes the 'flag is text rendered into an image' gap (the forensics-pcapin class of task)",
+      "volatility3 is what the playbooks call vol3; the launcher keeps that name",
+      "fpylll is the lattice/LLL solver behind most modern RSA-CTF attacks",
+      "hashpumpy and bkcrack cover hash length extension and known-plaintext ZIP",
+      "wabt and multimon-ng cover WASM and RF/audio challenges"
+    ]
+  },
+  "pip_repairs": {
+    "why": "Installing the cloud/AD tool set into the shared core venv downgraded pydantic to 1.x and z3-solver to 4.13, which broke fastapi/mcp/web3 and angr; claripy and arpy were also missing. Re-applying these pins after any bulk pip install keeps the venv usable.",
+    "pins": ["pydantic>=2.9,<3", "claripy", "z3-solver==5.1.0.0", "arpy==1.1.1", "setuptools<81"],
+    "verified": [
+      "claripy.BVS solver returns the expected value",
+      "angr imports against z3-solver 5.1.0.0",
+      "fastapi, mcp, web3, eth_account import",
+      "certipy runs with setuptools<81 (pkg_resources)"
+    ]
+  },
+  "skipped": [
+    {
+      "name": "garak / pyrit",
+      "reason": "AI/LLM-security stack pulls the torch/transformers tree; the install failed inside the shared core venv and its value for classic CTF categories is low. Install into a dedicated venv if LLM-security challenges appear."
+    }
+  ],
+  "dotnet": {
+    "sdk_version": "8.0.424",
+    "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/8.0.424/dotnet-sdk-8.0.424-linux-x64.tar.gz",
+    "sha512": "6503fd9f464d5e3a4f43a881d2b74afc6a2c46ceda74d027f1565b7239f4b3ec884857c03c0dcd49eb52f384d5ae1fa5aaf135f0a6aabc5518103aceed643c74",
+    "sha512_source": "same pin as the upstream muteki worker Dockerfile",
+    "install": "/usr/share/dotnet + /usr/local/bin/dotnet",
+    "ilspycmd_version": "9.1.0.7988",
+    "ilspycmd_install": "dotnet tool install --tool-path /opt/dotnet-tools ilspycmd --version 9.1.0.7988"
+  },
+  "glibc": {
+    "tool": "/opt/ctf/third-party/glibc-all-in-one",
+    "versions": [
+      "2.23-0ubuntu11.3_amd64",
+      "2.27-3ubuntu1.6_amd64",
+      "2.31-0ubuntu9.18_amd64",
+      "2.35-0ubuntu3.15_amd64",
+      "2.39-0ubuntu8.9_amd64"
+    ],
+    "note": "glibc-aio download 2.x fails to unpack the absolute ld.so symlink; the repo's legacy/download (or legacy/extract on the cached debs) works once zstd is installed."
+  }
+}

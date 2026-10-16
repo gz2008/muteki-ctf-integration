@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Execute a CTF tool inside the dedicated ctf-kali WSL distribution.
+set -euo pipefail
+
+if [ "$#" -lt 1 ]; then
+  echo "usage: muteki-ctf-exec <command> [args...]" >&2
+  exit 64
+fi
+
+COMMAND="$1"
+shift
+WSL_EXE="/mnt/c/Windows/System32/wsl.exe"
+DISTRO="${CTF_KALI_DISTRO:-ctf-kali}"
+
+quote() {
+  printf '%q' "$1"
+}
+
+program="$COMMAND"
+args=""
+for arg in "$@"; do
+  args+=" $(quote "$arg")"
+done
+
+# /init is required in sessions where the default distro's WSLInterop binfmt
+# entry was not refreshed after a repair.
+if [ -x /init ] && [ -x "$WSL_EXE" ]; then
+  exec /init "$WSL_EXE" "$WSL_EXE" -d "$DISTRO" -u ctf -- bash -lc "exec $(quote "$program")$args"
+fi
+
+exec "$WSL_EXE" -d "$DISTRO" -u ctf -- bash -lc "exec $(quote "$program")$args"
