@@ -45,6 +45,13 @@ function Get-WslLineCount {
 if (-not (Test-Path -LiteralPath $LockFile)) { throw "knowledge lock file missing: $LockFile" }
 $lock = Get-Content -LiteralPath $LockFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $ToolRoot = [IO.Path]::GetFullPath($lock.tool_root)
+if (-not (Test-Path -LiteralPath $ToolRoot)) {
+    # Same reasoning as fetch-knowledge.ps1: the lock carries the pinning
+    # machine's absolute paths, and a fresh clone has to fall back to its own
+    # layout or the second command in the quick start cannot run at all.
+    $ToolRoot = Join-Path (Split-Path -Parent $PSScriptRoot) "muteki-tool-root"
+    Write-Host "tool root recorded in the lock is missing here; using $ToolRoot"
+}
 $WslToolRoot = ConvertTo-WslPath $ToolRoot
 
 Write-Host "Verifying offline CTF corpora under $ToolRoot"
