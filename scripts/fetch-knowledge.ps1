@@ -142,14 +142,18 @@ $ToolRoot = [IO.Path]::GetFullPath($lock.tool_root)
 if (-not (Test-Path -LiteralPath $ToolRoot)) {
     # The lock records the absolute paths of the machine the corpora were pinned
     # on. On any other checkout they do not exist, so fall back to this
-    # repository's own layout, which is what a fresh clone has.
+    # repository's own layout - and create it, because a fresh clone has no tool
+    # root at all and the guard below would otherwise abort the very first run
+    # ("tool root missing"), which is exactly how a new user experiences it.
     $ToolRoot = Join-Path $Root "muteki-tool-root"
     Write-Host "tool root recorded in the lock is missing here; using $ToolRoot"
+    New-Item -ItemType Directory -Path $ToolRoot -Force | Out-Null
 }
 $ArchiveRoot = [IO.Path]::GetFullPath($lock.archive_root)
 if (-not (Test-Path -LiteralPath $ArchiveRoot)) {
     $ArchiveRoot = Join-Path $Root "archives\knowledge"
     Write-Host "archive root recorded in the lock is missing here; using $ArchiveRoot"
+    New-Item -ItemType Directory -Path $ArchiveRoot -Force | Out-Null
 }
 if (-not (Test-Path -LiteralPath $ToolRoot)) { throw "tool root missing: $ToolRoot" }
 
