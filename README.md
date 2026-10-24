@@ -22,6 +22,7 @@
 ```powershell
 git clone https://github.com/gz2008/muteki-ctf-integration.git
 cd muteki-ctf-integration
+.\bootstrap.cmd
 bin\ctf-studio.cmd
 ```
 
@@ -41,6 +42,14 @@ pwsh -File scripts\build-desktop.ps1
 客户端时需要修改哪些代码**，见
 [中文使用指南](docs/USAGE.zh-CN.md)。Studio 自身源码说明见
 [studio/README.md](studio/README.md)。
+
+需要离线语料和原生窗口时运行：
+
+```powershell
+.\bootstrap.cmd -Full
+```
+
+默认的 Core 模式不下载大文件，也不修改 Windows 或 WSL 设置。
 
 ## 你会得到什么
 
@@ -118,9 +127,11 @@ Playbook 送进每个 worker 的可见范围。改动清单、应用方式，以
 git clone https://github.com/gz2008/muteki-ctf-integration.git
 cd muteki-ctf-integration
 
-# 拉取九套钉死的语料并链接字典（约 1.4 GB，支持断点续传）
-pwsh -File scripts\fetch-knowledge.ps1
-pwsh -File scripts\verify-knowledge.ps1
+# 核心自检，不需要管理员权限
+.\bootstrap.cmd
+
+# 可选：离线语料和原生窗口
+.\bootstrap.cmd -Full
 
 # 对任意题目目录试用
 bin\ctf-triage.cmd .\some-challenge
@@ -130,6 +141,7 @@ bin\ctf-triage.cmd .\some-challenge
 
 | 路径 | 内容 |
 |---|---|
+| `bootstrap.cmd` / `bootstrap.sh` | 新手引导安装器 |
 | `scripts/` | 分析器、语料拉取、索引、基准与校验脚本 |
 | `bin/` | Windows 入口（`*.cmd` 及其调用的 PowerShell 脚本） |
 | `studio/` | CTF Studio 的本地 API、Web UI 和桌面壳 |

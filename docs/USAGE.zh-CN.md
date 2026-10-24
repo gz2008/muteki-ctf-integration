@@ -44,9 +44,51 @@ CTF Studio 是一个本地优先的 CTF 工作台。它不替代解题 Agent，�
 
 ## 3. 安装和启动
 
+### 3.1 推荐：运行引导安装器
+
+Windows 新手先运行：
+
+```powershell
+.\bootstrap.cmd
+```
+
+默认 Core 模式只检查 Python 3.10+、核心文件和 Studio 源码，并运行一次
+`ctf-triage` 自测。它不下载大文件、不安装系统软件、不修改 WSL，也不需要
+管理员权限。
+
+需要离线语料和原生桌面窗口时：
+
+```powershell
+.\bootstrap.cmd -Full
+```
+
+也可以单独选择：
+
+```powershell
+.\bootstrap.cmd -WithKnowledge
+.\bootstrap.cmd -BuildDesktop
+.\bootstrap.cmd -CreateShortcut
+```
+
+`-WithKnowledge` 需要可用的 WSL 和 `ctf-kali`。它会下载约 1.4 GB 的语料；
+解压、建立索引和补充工具后，仓库本级目录可能达到数 GB。它不会自动创建 Kali，
+也不会代替用户修改 Windows 功能。
+
+Linux/macOS 核心工具：
+
+```bash
+chmod +x bootstrap.sh
+./bootstrap.sh
+```
+
+当前完整语料和原生桌面构建仍以 Windows/WSL 为主。
+
+### 3.2 手动启动
+
 ```powershell
 git clone https://github.com/gz2008/muteki-ctf-integration.git
 cd muteki-ctf-integration
+.\bootstrap.cmd
 bin\ctf-studio.cmd
 ```
 
@@ -56,22 +98,21 @@ bin\ctf-studio.cmd
 bin\ctf-studio.cmd --port 8777
 ```
 
-### 获取离线语料
+### 3.3 获取离线语料
 
 完整检索需要先拉取九套固定 commit 的语料：
 
 ```powershell
-pwsh -File scripts\fetch-knowledge.ps1
-pwsh -File scripts\verify-knowledge.ps1
+.\bootstrap.cmd -WithKnowledge
 ```
 
 这些文件会写入 `muteki-tool-root/`、`archives/` 和 `index/`，已在 `.gitignore`
 中排除。不要把语料重新提交到仓库，各来源仍受自己的许可证约束。
 
-### 构建原生窗口
+### 3.4 构建原生窗口
 
 ```powershell
-pwsh -File scripts\build-desktop.ps1
+.\bootstrap.cmd -BuildDesktop
 ```
 
 产物位于 `studio\dist\CTFStudio.exe`。该 EXE 仍会读取仓库内的工具和语料，
