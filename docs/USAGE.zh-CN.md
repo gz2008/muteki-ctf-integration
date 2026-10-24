@@ -49,8 +49,10 @@ CTF Studio 是一个本地优先的 CTF 工作台。它不替代解题 Agent，�
 Windows 新手先运行：
 
 ```powershell
-.\bootstrap.cmd
+.\START-HERE.cmd
 ```
+
+或者直接双击仓库根目录的 `START-HERE.cmd`，输入 `1`，按回车。
 
 默认 Core 模式只检查 Python 3.10+、核心文件和 Studio 源码，并运行一次
 `ctf-triage` 自测。它不下载大文件、不安装系统软件、不修改 WSL，也不需要

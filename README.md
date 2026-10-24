@@ -22,6 +22,7 @@
 ```powershell
 git clone https://github.com/gz2008/muteki-ctf-integration.git
 cd muteki-ctf-integration
+# Windows 下也可以直接双击 START-HERE.cmd，然后输入 1
 .\bootstrap.cmd
 bin\ctf-studio.cmd
 ```
@@ -141,7 +142,8 @@ bin\ctf-triage.cmd .\some-challenge
 
 | 路径 | 内容 |
 |---|---|
-| `bootstrap.cmd` / `bootstrap.sh` | 新手引导安装器 |
+| `START-HERE.cmd` | Windows 新手双击入口 |
+| `bootstrap.cmd` / `bootstrap.sh` | 命令行引导安装器 |
 | `scripts/` | 分析器、语料拉取、索引、基准与校验脚本 |
 | `bin/` | Windows 入口（`*.cmd` 及其调用的 PowerShell 脚本） |
 | `studio/` | CTF Studio 的本地 API、Web UI 和桌面壳 |
