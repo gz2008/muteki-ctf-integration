@@ -13,6 +13,35 @@
 许可证：AGPL-3.0（见 `LICENSE`）。**第三方语料不在本仓库内重新分发**，而是按
 钉死的 commit 从各自上游拉取。
 
+## CTF Studio 图形工作台
+
+仓库包含一个本地优先的图形化入口 **CTF Studio**。它把附件分诊、离线语料检索、
+字符串扫描、二进制策略分析、编码变换、flag 候选台账、Kali/Windows 控制台和
+多 Agent 竞速放在同一个界面中。
+
+```powershell
+git clone https://github.com/gz2008/muteki-ctf-integration.git
+cd muteki-ctf-integration
+bin\ctf-studio.cmd
+```
+
+浏览器入口默认只监听 `http://127.0.0.1:8765/`。也可以构建原生窗口：
+
+```powershell
+pwsh -File scripts\build-desktop.ps1
+```
+
+三种模式：
+
+- **本地快解**：不调用大模型，直接使用 Python 工具链和离线语料。
+- **Codex 蜂群**：启动 2–8 个 `codex exec` Worker 在隔离目录中竞速。
+- **Muteki 蜂群**：把题目派发给已运行的 Project Muteki 服务。
+
+完整安装、操作、故障排查，以及**使用 Claude Code、Cursor 或其他非 Codex
+客户端时需要修改哪些代码**，见
+[中文使用指南](docs/USAGE.zh-CN.md)。Studio 自身源码说明见
+[studio/README.md](studio/README.md)。
+
 ## 你会得到什么
 
 **五个入口，覆盖一道题里"机械"的那一半工作。**
@@ -103,6 +132,8 @@ bin\ctf-triage.cmd .\some-challenge
 |---|---|
 | `scripts/` | 分析器、语料拉取、索引、基准与校验脚本 |
 | `bin/` | Windows 入口（`*.cmd` 及其调用的 PowerShell 脚本） |
+| `studio/` | CTF Studio 的本地 API、Web UI 和桌面壳 |
+| `docs/` | 中文使用指南与部署说明 |
 | `locks/` | 钉死的来源清单，含 commit 与许可 |
 | `skills/` | 面向 agent 的分类路由 CTF Playbook |
 | `skill/` | 集成工作流的 Codex skill 包 |

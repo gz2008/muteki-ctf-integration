@@ -5,6 +5,15 @@ archives/
 index/
 bench/
 .tmp/
+studio/build/
+studio/dist/
+studio/runs/
+studio/.desktop-venv/
+studio/.desktop-profile/
+studio/experience.jsonl
+studio/client-info.json
 
 # Local logs and scratch files
 *.log
+__pycache__/
+*.py[cod]

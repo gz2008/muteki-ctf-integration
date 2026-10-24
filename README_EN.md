@@ -12,6 +12,12 @@ so Muteki workers get the same tools and corpora through `./toolbox`.
 License: AGPL-3.0 (see `LICENSE`). Third-party corpora are *not* redistributed
 here; they are fetched from their own upstreams at pinned commits.
 
+> Some command transcripts below preserve the original `D:\codex\...` test
+> paths as engineering evidence. Replace them with your clone location or the
+> documented environment variables when reproducing the commands. The portable
+> setup and non-Codex adaptation guide is in
+> [`docs/USAGE.zh-CN.md`](docs/USAGE.zh-CN.md).
+
 ## What you get
 
 **Five entry points that cover the mechanical half of a solve.**

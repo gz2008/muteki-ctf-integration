@@ -19,32 +19,42 @@ Use this skill when the user wants to solve or practice an authorized CTF challe
 
 ## Local paths
 
-- Integration root: `D:\codex\output\muteki-ctf-integration`
-- Muteki source: `D:\codex\output\muteki`
-- CTF suite: `D:\codex\ctf-suite`
-- Tool root for Muteki workers: `D:\codex\output\muteki-ctf-integration\muteki-tool-root`
-- Isolated runtime: the `ctf-kali` WSL distribution
+- Integration root: the repository containing this `skill/` directory.
+- Muteki source: `$MUTEKI_ROOT`; it must contain `run.sh`.
+- Optional CTF suite: `$CTF_SUITE_ROOT`.
+- Tool root for Muteki workers: `<integration-root>/muteki-tool-root`.
+- Isolated runtime: `$CTF_KALI_DISTRO` (default `ctf-kali`).
 
-The integration root is the source of truth. Do not copy challenge artifacts or answers into the Mu teki source tree.
+The integration root is the source of truth. Do not copy challenge artifacts or answers into the Muteki source tree.
+
+Resolve `<integration-root>` once before running commands. For example, from the
+repository root:
+
+```powershell
+$Repo = (Resolve-Path .).Path
+```
+
+In WSL, convert the same repository path to its `/mnt/<drive>/...` form.
 
 ## Workflow
 
 1. Check the runtime before changing anything:
 
 ```bash
-/mnt/d/codex/output/muteki-ctf-integration/bin/muteki-ctf-bridge status
-/mnt/d/codex/output/muteki-ctf-integration/bin/muteki-ctf-bridge doctor
-/mnt/d/codex/output/muteki-ctf-integration/bin/muteki-ctf-bridge validate
+<integration-root>/bin/muteki-ctf-bridge status
+<integration-root>/bin/muteki-ctf-bridge doctor
+<integration-root>/bin/muteki-ctf-bridge validate
 ```
 
 2. Create a scoped workspace for each challenge:
 
 ```bash
-/mnt/d/codex/output/muteki-ctf-integration/bin/muteki-ctf-bridge new \
+<integration-root>/bin/muteki-ctf-bridge new \
   --category web --name example --target http://127.0.0.1:8000
 ```
 
-3. Inventory the supplied artifacts and classify the category. Read the matching reference under `D:\codex\ctf-suite\skill-src\ctf-competition\references\`:
+3. Inventory the supplied artifacts and classify the category. Read the matching
+   reference under `<integration-root>/skills/muteki-ctf-local-playbook/references/`:
 
 - Web: `web.md`
 - Pwn: `pwn.md`
@@ -57,24 +67,26 @@ The integration root is the source of truth. Do not copy challenge artifacts or 
 4. Run tools through the isolated distribution when a command must not depend on the Windows or default-Ubuntu host:
 
 ```bash
-/mnt/d/codex/output/muteki-ctf-integration/bin/muteki-ctf-bridge exec sqlmap --version
+<integration-root>/bin/muteki-ctf-bridge exec sqlmap --version
 ```
 
 5. For Muteki, use the prepared tool root instead of the repository's empty `ctf-tools` directory:
 
 ```bash
-export MUTEKI_LOCAL_WORKER_ROOT=/mnt/d/codex/output/muteki-ctf-integration/muteki-tool-root
-cd /mnt/d/codex/output/muteki
+export MUTEKI_LOCAL_WORKER_ROOT=<integration-root>/muteki-tool-root
+cd "$MUTEKI_ROOT"
 ./run.sh web
 ```
 
-The Windows launcher `bin\muteki-ctf.cmd run-web` performs the same setup. Muteki remains a local, single-operator service unless the user explicitly configures remote access.
+The Windows launcher `bin\muteki-ctf.cmd run-web` performs the same setup when
+`MUTEKI_ROOT` is configured. Muteki remains a local, single-operator service
+unless the user explicitly configures remote access.
 
 6. Preserve commands, outputs, and artifacts in the challenge workspace. On completion, update `writeup.md`, verify the flag independently, and index the result:
 
 ```bash
-/mnt/d/codex/output/muteki-ctf-integration/bin/muteki-ctf-bridge journal \
-  --path /mnt/d/codex/ctf-suite/workspace/<category>/<name>
+<integration-root>/bin/muteki-ctf-bridge journal \
+  --path "$CTF_SUITE_ROOT/workspace/<category>/<name>"
 ```
 
 ## Integration boundary

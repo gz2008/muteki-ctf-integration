@@ -22,10 +22,10 @@ Repositories without a declared license are fetched for local, non-redistributed
 use only and are marked `NOASSERTION (local use only)` in the lock file.
 
 These corpora contain public proof-of-concept documents with embedded webshell and
-exploit samples. Windows Defender flags them by signature, so
-`D:\codex\output\muteki-ctf-integration` is kept in the Defender exclusion list
-(see `README.md` for the removal command). Files are never executed here; they are
-read offline by authorized CTF workers.
+exploit samples. Windows Defender may flag them by signature. If you intentionally
+keep a scoped exclusion for the generated corpus directory, use your own clone
+path, review the scope, and remove it when no longer needed. Files are never
+executed here; they are read offline by authorized CTF workers.
 
 ## Wordlists
 

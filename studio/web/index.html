@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>CTF Studio · 开始解题</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <div class="app">
+    <aside class="rail">
+      <div class="brand" title="CTF Studio">
+        <span class="brand-mark">M</span>
+        <span class="brand-pulse"></span>
+      </div>
+      <nav class="rail-nav" aria-label="主导航">
+        <button class="rail-btn active" data-view="compose" title="新建解题">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="rail-btn" data-view="history" title="运行记录">
+          <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+        </button>
+        <button class="rail-btn" data-view="corpus" title="语料检索">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        </button>
+        <button class="rail-btn" data-view="tools" title="变换台">
+          <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg>
+        </button>
+        <button class="rail-btn" data-view="settings" title="设置与诊断">
+          <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+        </button>
+      </nav>
+      <div class="rail-bottom">
+        <button class="rail-btn" id="helpButton" title="使用指南">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.7"/><path d="M12 16.6h.01"/></svg>
+        </button>
+        <button class="rail-btn" id="themeToggle" title="切换明暗">
+          <svg viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8Z"/></svg>
+        </button>
+        <a class="rail-btn" href="https://github.com/gz2008/muteki-ctf-integration" target="_blank" rel="noreferrer" title="GitHub">
+          <svg viewBox="0 0 24 24"><path d="M9 19c-4 1.5-4-2.5-6-3m12 6v-3.9a3.4 3.4 0 0 0-1-2.6c3.3-.4 6.8-1.6 6.8-7.3a5.7 5.7 0 0 0-1.6-4A5.3 5.3 0 0 0 19 1.7s-1.3-.4-4.3 1.6a14.6 14.6 0 0 0-7.4 0C4.3 1.3 3 1.7 3 1.7a5.3 5.3 0 0 0-.2 2.5 5.7 5.7 0 0 0-1.6 4c0 5.7 3.5 6.9 6.8 7.3a3.4 3.4 0 0 0-1 2.6V22"/></svg>
+        </a>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="crumbs">
+          <span class="crumb-muted">Workspace</span>
+          <svg viewBox="0 0 24 24" class="crumb-sep"><path d="m9 18 6-6-6-6"/></svg>
+          <span id="crumbCurrent">新建解题</span>
+        </div>
+        <div class="topbar-right">
+          <div class="status-chips" id="statusChips"></div>
+          <button class="soft-btn" id="mutekiButton">
+            <span class="dot" id="mutekiDot"></span>
+            Muteki
+          </button>
+        </div>
+      </header>
+
+      <section class="view" id="view-compose">
+        <div class="hero">
+          <div class="eyebrow"><span class="eyebrow-line"></span> CTF STUDIO · 本地优先</div>
+          <h1>开始解题</h1>
+          <p>粘贴题面、题目 URL 或附件。先做确定性分诊，再按需拉起多 Agent 蜂群。</p>
+        </div>
+
+        <div class="guide-card card hidden" id="firstRunCard">
+          <div>
+            <strong>第一次用？三步就够了</strong>
+            <p>贴题面 / URL / 附件 → 选模式 → 点“派发”。结果会进入运行页，flag 在台账里。</p>
+          </div>
+          <button class="soft-btn" id="firstRunOpen" type="button">看使用指南</button>
+        </div>
+
+        <div class="composer card" id="dropzone">
+          <textarea id="description" rows="5" placeholder="描述一道题 —— 粘贴题面、一个 URL，或附件说明。蜂群会推断题目类别与目标，决定派出几个解题器。"></textarea>
+          <input type="file" id="fileInput" multiple hidden>
+          <div class="attach-row">
+            <button class="icon-text-btn" id="attachButton">
+              <svg viewBox="0 0 24 24"><path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l8.9-8.9a4 4 0 0 1 5.7 5.7l-8.9 8.9a2 2 0 1 1-2.8-2.8l8.2-8.2"/></svg>
+              附件
+            </button>
+            <div class="file-chips" id="fileChips"></div>
+            <span class="drop-hint">或拖拽文件到这里</span>
+            <div class="spacer"></div>
+            <span class="kbd-hint"><kbd>Ctrl</kbd><kbd>↵</kbd> 派发</span>
+          </div>
+          <div class="quick-row">
+            <select id="mode" class="mode-select" title="解题模式">
+              <option value="local">本地快解</option>
+              <option value="codex">Codex 蜂群</option>
+              <option value="muteki">Muteki 蜂群</option>
+            </select>
+            <label class="pill"><input type="checkbox" id="webTools" checked> Web 工具</label>
+            <label class="pill"><input type="checkbox" id="multiFlag"> 多 flag</label>
+            <label class="pill"><input type="checkbox" id="allowInput"> 人工输入</label>
+            <button class="pill" id="advancedToggle">高级 <span class="chev">▾</span></button>
+            <div class="spacer"></div>
+            <button class="primary-btn" id="dispatchButton">
+              <span>派发</span>
+              <svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            </button>
+          </div>
+          <p class="mode-hint" id="modeHint"></p>
+          <div class="advanced hidden" id="advancedPanel">
+            <div class="field-grid">
+              <label class="field">
+                <span>题目 URL</span>
+                <input id="challengeUrl" type="url" placeholder="http://127.0.0.1:8080/">
+              </label>
+              <label class="field">
+                <span>类别</span>
+                <select id="category">
+                  <option value="auto">自动推断</option>
+                  <option value="web">web</option>
+                  <option value="pwn">pwn</option>
+                  <option value="crypto">crypto</option>
+                  <option value="rev">reverse</option>
+                  <option value="forensics">forensics</option>
+                  <option value="misc">misc</option>
+                  <option value="osint">osint</option>
+                  <option value="blockchain">blockchain</option>
+                  <option value="mobile">mobile</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Flag 格式</span>
+                <input id="flagFormat" type="text" value="flag{...}" placeholder="flag{...}">
+              </label>
+              <label class="field">
+                <span>Worker 总数</span>
+                <input id="workers" type="number" min="1" max="8" value="2">
+              </label>
+              <label class="field">
+                <span>竞速时限（秒）</span>
+                <input id="raceSeconds" type="number" min="30" max="3600" value="300">
+              </label>
+              <label class="field">
+                <span>总时长（秒，0 不限）</span>
+                <input id="totalSeconds" type="number" min="0" max="14400" value="0">
+              </label>
+              <label class="field">
+                <span>成本预算（USD，0 不限）</span>
+                <input id="costBudget" type="number" min="0" step="0.1" value="0">
+              </label>
+              <label class="field check">
+                <input type="checkbox" id="offline">
+                <span>离线模式（Muteki / Codex）</span>
+              </label>
+              <label class="field check">
+                <input type="checkbox" id="container">
+                <span>Worker 容器隔离（Muteki）</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="capability-grid" id="capabilityGrid">
+          <div class="cap-card skeleton"></div>
+          <div class="cap-card skeleton"></div>
+          <div class="cap-card skeleton"></div>
+          <div class="cap-card skeleton"></div>
+        </div>
+
+        <div class="hint-strip">
+          <span class="hint-dot"></span>
+          flag 只有能溯源到真实执行输出才算数。默认本地快解不联网；Web / 蜂群模式只用于你已授权的题目。
+        </div>
+      </section>
+
+      <section class="view hidden" id="view-run">
+        <div class="run-head">
+          <div class="run-head-main">
+            <div class="run-badges">
+              <span class="badge" id="runMode">local</span>
+              <span class="badge soft" id="runCategory">misc</span>
+              <span class="badge status-badge" id="runStatus">created</span>
+            </div>
+            <h1 class="run-title" id="runTitle">未命名题目</h1>
+            <p class="run-sub" id="runSub">等待派发</p>
+          </div>
+          <div class="run-head-side">
+            <div class="timer" id="runTimer">00:00</div>
+            <button class="soft-btn danger" id="stopRun">停止</button>
+            <button class="soft-btn" id="backToCompose">新题</button>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <h2>蜂群通道</h2>
+              <span class="muted" id="laneCount">0 lanes</span>
+            </div>
+            <div class="lanes" id="lanes"></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <h2>共享事实</h2>
+              <span class="muted" id="factCount">0 facts</span>
+            </div>
+            <div class="facts" id="facts"></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <h2>Flag 台账</h2>
+              <span class="muted" id="flagCount">0 flags</span>
+            </div>
+            <div class="flags" id="flags"></div>
+            <form class="flag-input" id="flagForm">
+              <input id="manualFlag" placeholder="人工确认一个 flag…">
+              <button class="soft-btn" type="submit">确认</button>
+            </form>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <h2>下一手</h2>
+              <span class="muted" id="actionCount">0 actions</span>
+            </div>
+            <div class="actions" id="actions"></div>
+          </div>
+        </div>
+
+        <div class="card console-card">
+          <div class="card-head">
+            <h2>控制台 · ctf-kali</h2>
+            <span class="muted">命令在运行目录内执行，工具链已挂 PATH</span>
+          </div>
+          <pre class="terminal" id="terminal">等待命令…</pre>
+          <form class="console-form" id="consoleForm">
+            <span class="prompt">$</span>
+            <input id="commandInput" autocomplete="off" spellcheck="false" placeholder="checksec ./chall">
+            <select id="consoleShell" title="执行环境">
+              <option value="wsl">Kali</option>
+              <option value="windows">Windows</option>
+            </select>
+            <button class="primary-btn small" type="submit">执行</button>
+          </form>
+        </div>
+
+        <details class="card raw-events">
+          <summary>原始事件流 <span class="muted" id="eventCount"></span></summary>
+          <pre id="events"></pre>
+        </details>
+      </section>
+
+      <section class="view hidden" id="view-history">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> RUNS</div>
+            <h1>运行记录</h1>
+            <p>所有运行都保存在本地 <code>studio/runs/</code>。</p>
+          </div>
+          <button class="soft-btn" id="refreshHistory">刷新</button>
+        </div>
+        <div class="history-list" id="historyList"></div>
+      </section>
+
+      <section class="view hidden" id="view-corpus">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> OFFLINE CORPUS</div>
+            <h1>语料检索</h1>
+            <p>九套钉死 commit 的离线语料；BM25 支持中文，ripgrep 支持正则。</p>
+          </div>
+        </div>
+        <form class="card search-card" id="searchForm">
+          <div class="search-row">
+            <input id="searchQuery" placeholder="RSA Coppersmith 攻击 / tcache poisoning / SQL Injection">
+            <select id="searchMode">
+              <option value="index">BM25 排序</option>
+              <option value="corpus">ripgrep 直搜</option>
+            </select>
+            <select id="searchCategory">
+              <option value="web">web</option>
+              <option value="pwn">pwn</option>
+              <option value="crypto">crypto</option>
+              <option value="rev">rev</option>
+              <option value="forensics">forensics</option>
+              <option value="misc">misc</option>
+              <option value="cloud">cloud</option>
+            </select>
+            <button class="primary-btn" type="submit">搜索</button>
+          </div>
+        </form>
+        <div class="search-results" id="searchResults"></div>
+      </section>
+
+      <section class="view hidden" id="view-settings">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> DIAGNOSTICS</div>
+            <h1>设置与诊断</h1>
+            <p>工具链、WSL、Codex 与 Muteki 的实时状态。</p>
+          </div>
+          <button class="soft-btn" id="refreshStatus">重新检测</button>
+        </div>
+        <div class="settings-grid">
+          <div class="card">
+            <div class="card-head"><h2>能力</h2></div>
+            <div class="diag-list" id="diagList"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Muteki 蜂群</h2></div>
+            <div class="muteki-panel" id="mutekiPanel"></div>
+            <button class="primary-btn" id="startMuteki">启动 Muteki 服务</button>
+            <p class="muted small">首次启动会在 ctf-kali 内安装 uv、同步依赖并构建前端，可能需要几分钟。Worker 还需要已登录的 agent CLI。</p>
+          </div>
+          <div class="card wide">
+            <div class="card-head"><h2>命令与路径</h2></div>
+            <pre class="path-block" id="pathBlock"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="view hidden" id="view-tools">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> TRANSFORM</div>
+            <h1>变换台</h1>
+            <p>离线编解码与古典密码；配方按顺序执行，Magic 会尝试常见的多层编码。</p>
+          </div>
+          <span class="badge soft">CyberChef 风格 · 全本地</span>
+        </div>
+        <div class="card toolbox">
+          <div class="toolbox-grid">
+            <div class="toolbox-pane">
+              <div class="pane-head"><span>输入</span><span class="muted" id="inputMeta">0 chars</span></div>
+              <textarea id="transformInput" spellcheck="false" placeholder="粘贴 Base64 / Hex / URL / JWT / Morse / 二进制…"></textarea>
+            </div>
+            <div class="toolbox-ops" id="transformOps"></div>
+            <div class="toolbox-pane">
+              <div class="pane-head">
+                <span>输出</span>
+                <span class="flag-badge hidden" id="transformFlagBadge">flag candidate</span>
+              </div>
+              <pre id="transformOutput" class="transform-output">等待输入…</pre>
+            </div>
+          </div>
+          <div class="recipe-row">
+            <span class="recipe-label">配方</span>
+            <div class="recipe-chips" id="recipeChips"><span class="muted">raw</span></div>
+            <div class="spacer"></div>
+            <button class="soft-btn" id="magicButton">Magic 自动识别</button>
+            <button class="soft-btn" id="clearRecipe">清空</button>
+          </div>
+          <div class="transform-actions">
+            <button class="soft-btn" id="copyOutput">复制输出</button>
+            <button class="soft-btn" id="useOutput">输出作为输入</button>
+            <button class="soft-btn" id="sendToChallenge">放进题面</button>
+            <button class="primary-btn small" id="saveTransformFlag">记入当前台账</button>
+            <span class="muted small" id="transformHint">所有操作在浏览器本地完成，不发网络请求。</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="guideBackdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-line"></span> QUICK START</div>
+          <h2 id="guideTitle">CTF Studio 使用指南</h2>
+        </div>
+        <button class="modal-close" id="guideClose" type="button" aria-label="关闭">×</button>
+      </div>
+
+      <div class="guide-steps">
+        <div class="guide-step">
+          <span class="guide-num">1</span>
+          <div>
+            <strong>把题目交给它</strong>
+            <p>在“开始解题”里粘贴题面；有 URL 就填到“高级 → 题目 URL”；附件直接拖进输入框。Ctrl+Enter 可以直接派发。</p>
+          </div>
+        </div>
+        <div class="guide-step">
+          <span class="guide-num">2</span>
+          <div>
+            <strong>选一个模式</strong>
+            <p><b>本地快解</b>最快，不需要模型账号；<b>Codex 蜂群</b>适合难题，多个 Agent 并行竞速；<b>Muteki 蜂群</b>需要本机 Muteki 服务已启动。</p>
+          </div>
+        </div>
+        <div class="guide-step">
+          <span class="guide-num">3</span>
+          <div>
+            <strong>在运行页看结果</strong>
+            <p>“共享事实”记录已经确认的发现，“下一手”给可执行命令，“Flag 台账”区分候选和已验证。命令可以在下方 Kali 控制台直接执行。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="guide-grid">
+        <div class="guide-tile">
+          <strong>语料检索</strong>
+          <p>搜 SQL 注入、tcache、RSA Coppersmith 等关键词；BM25 排序或 ripgrep 正则直搜，全部离线。</p>
+        </div>
+        <div class="guide-tile">
+          <strong>变换台</strong>
+          <p>Base64 / Hex / Morse / ROT / XOR / JWT / Brainfuck 等；先点“Magic 自动识别”最省事。</p>
+        </div>
+        <div class="guide-tile">
+          <strong>设置与诊断</strong>
+          <p>看语料、Kali、Codex、Muteki 是否就绪；Muteki 服务也在这里启动。</p>
+        </div>
+        <div class="guide-tile">
+          <strong>运行记录</strong>
+          <p>每次运行都保存在 <code>studio/runs/</code>，包括事实、命令和最终 brief。</p>
+        </div>
+      </div>
+
+      <div class="guide-tip">
+        <b>使用边界：</b>只在你拥有或已获授权的题目 / 靶机上使用；flag 只有能追溯到真实执行输出或人工确认时才算已验证。
+      </div>
+
+      <div class="modal-foot">
+        <button class="primary-btn" id="guideStart" type="button">开始使用</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toasts"></div>
+
+  <script>
+    window.__STUDIO_TOKEN__ = "__TOKEN_VALUE__";
+    window.__STUDIO_VERSION__ = "__VERSION_VALUE__";
+  </script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
